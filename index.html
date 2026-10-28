@@ -269,6 +269,30 @@
     </div>
   </dialog>
 
+  <dialog class="modal" id="meetings-export-modal">
+    <div class="modal-card meetings-export-card">
+      <h3>ذخیره تصویر جلسات دیلی</h3>
+      <p class="lead modal-lead">می‌توانید همه روزها را در یک تصویر بگیرید، یا خروجی را به چند بخش تقسیم کنید.</p>
+
+      <div class="filter-row">
+        <span class="field-label">حالت خروجی</span>
+        <div class="chip-group" id="meetings-export-mode" role="group" aria-label="حالت خروجی تصویر">
+          <button type="button" class="chip active" data-mode="all">همه در یک تصویر</button>
+          <button type="button" class="chip" data-mode="split2">دو بخش</button>
+          <button type="button" class="chip" data-mode="custom">سفارشی</button>
+        </div>
+        <p class="filter-hint" id="meetings-export-hint">یک فایل شامل شنبه تا پنجشنبه.</p>
+      </div>
+
+      <div id="meetings-export-parts" class="meetings-export-parts hidden"></div>
+
+      <div class="modal-actions">
+        <button type="button" class="btn ghost" id="meetings-export-close">انصراف</button>
+        <button type="button" class="btn primary" id="meetings-export-confirm">ذخیره</button>
+      </div>
+    </div>
+  </dialog>
+
   <dialog class="modal" id="slot-modal">
     <form method="dialog" id="slot-form" class="modal-card">
       <h3 id="slot-modal-title">بازه زمانی</h3>

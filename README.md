@@ -104,7 +104,7 @@ Older `version: 1` files (no `teams`) are migrated automatically into a default 
 | Shared ranges | Select people and compute full intersection, or max concurrency per day |
 | Lookup by time | Pick a time + days; list who’s available then (active team) |
 | Who’s working now? | People currently working right now (active team) |
-| Daily meetings | Per-team daily standup (Sat–Thu): time, oral/written people, and notes (export as image) |
+| Daily meetings | Per-team daily standup (Sat–Thu): time, oral/written people, and notes (export as one or split images) |
 
 ## Project files
 

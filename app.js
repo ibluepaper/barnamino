@@ -68,6 +68,11 @@
     lookupTime: "10:00",
     lookupDays: new Set(),
     lookupMode: "any",
+    meetingExportMode: "all", // "all" | "split2" | "custom"
+    meetingExportParts: [
+      ["sat", "sun", "mon"],
+      ["tue", "wed", "thu"],
+    ],
   };
 
   const el = {
@@ -113,6 +118,9 @@
     existingList: document.getElementById("existing-list"),
     meetingsGrid: document.getElementById("meetings-grid"),
     meetingsLead: document.getElementById("meetings-lead"),
+    meetingsExportModal: document.getElementById("meetings-export-modal"),
+    meetingsExportParts: document.getElementById("meetings-export-parts"),
+    meetingsExportHint: document.getElementById("meetings-export-hint"),
   };
 
   function uid() {
@@ -2012,22 +2020,52 @@
     return names.length ? names.join("، ") : "—";
   }
 
-  function measureMeetingsExportHeight(meetings) {
+  function meetingDaysFromKeys(keys) {
+    const set = new Set(keys);
+    return MEETING_DAYS.filter((d) => set.has(d.key));
+  }
+
+  function meetingPartLabel(days) {
+    if (!days.length) return "خالی";
+    if (days.length === 1) return days[0].label;
+    return `${days[0].label} تا ${days[days.length - 1].label}`;
+  }
+
+  function defaultMeetingExportParts() {
+    return [
+      ["sat", "sun", "mon"],
+      ["tue", "wed", "thu"],
+    ];
+  }
+
+  function getMeetingExportParts() {
+    if (state.meetingExportMode === "all") {
+      return [MEETING_DAYS.map((d) => d.key)];
+    }
+    if (state.meetingExportMode === "split2") {
+      return defaultMeetingExportParts();
+    }
+    return state.meetingExportParts
+      .map((part) => part.filter((key) => MEETING_DAYS.some((d) => d.key === key)))
+      .filter((part) => part.length);
+  }
+
+  function measureMeetingsExportHeight(meetings, days) {
     const pad = 48;
-    const header = 88;
+    const header = 100;
     const footer = 28;
-    const dayGap = 16;
-    const dayPadY = 22;
-    const titleBlock = 46;
-    const metaH = 46;
-    const groupHeader = 20;
-    const noteHeader = 20;
-    const lineH = 22;
+    const dayGap = 18;
+    const dayPadY = 26;
+    const titleBlock = 52;
+    const metaH = 54;
+    const groupHeader = 24;
+    const noteHeader = 24;
+    const lineH = 26;
     let h = pad + header;
     const measureCanvas = document.createElement("canvas").getContext("2d");
-    measureCanvas.font = "600 14px Vazirmatn, Tahoma, sans-serif";
+    measureCanvas.font = "600 17px Vazirmatn, Tahoma, sans-serif";
     const textMaxW = 1100 - pad * 2 - 72 - 44;
-    for (const day of MEETING_DAYS) {
+    for (const day of days) {
       const entry = pruneMeetingIds(meetings[day.key] || emptyMeetingDay());
       const noteLines = entry.note
         ? Math.max(1, wrapCanvasText(measureCanvas, entry.note, textMaxW).length)
@@ -2055,6 +2093,238 @@
     return h + footer + pad;
   }
 
+  async function renderMeetingsExportBlob(meetings, days, title) {
+    const width = 1100;
+    const pad = 48;
+    const height = measureMeetingsExportHeight(meetings, days);
+    const dpr = Math.min(2, window.devicePixelRatio || 1);
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.round(width * dpr);
+    canvas.height = Math.round(height * dpr);
+    const ctx = canvas.getContext("2d");
+    ctx.scale(dpr, dpr);
+    ctx.direction = "rtl";
+    ctx.textBaseline = "middle";
+
+    const bg = ctx.createLinearGradient(0, 0, width, height);
+    bg.addColorStop(0, "#d7ebe3");
+    bg.addColorStop(0.45, "#eef6f2");
+    bg.addColorStop(1, "#f7fbf9");
+    ctx.fillStyle = bg;
+    ctx.fillRect(0, 0, width, height);
+
+    ctx.fillStyle = "rgba(15, 118, 110, 0.08)";
+    ctx.beginPath();
+    ctx.ellipse(180, 80, 220, 120, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = "rgba(15, 118, 110, 0.05)";
+    ctx.beginPath();
+    ctx.ellipse(width - 160, 140, 200, 110, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    fillRoundRect(ctx, pad, pad, width - pad * 2, height - pad * 2, 28, "rgba(255,255,255,0.82)");
+
+    const contentX = pad + 36;
+    const contentW = width - pad * 2 - 72;
+    let y = pad + 52;
+
+    ctx.fillStyle = "#0f1c1a";
+    ctx.font = "800 34px Vazirmatn, Tahoma, sans-serif";
+    ctx.textAlign = "center";
+    ctx.fillText(title, width / 2, y);
+
+    y += 58;
+
+    const dayPadY = 26;
+    const lineH = 26;
+    const textMaxW = contentW - 44;
+
+    for (const day of days) {
+      const entry = pruneMeetingIds(meetings[day.key] || emptyMeetingDay());
+      const noteText = (entry.note || "").trim();
+      ctx.font = "600 17px Vazirmatn, Tahoma, sans-serif";
+      const noteLines = noteText ? wrapCanvasText(ctx, noteText, textMaxW) : ["—"];
+      const verbalLines = wrapCanvasText(ctx, meetingPeopleLabel(entry.verbalIds), textMaxW);
+      const writtenLines = wrapCanvasText(ctx, meetingPeopleLabel(entry.writtenIds), textMaxW);
+      const cardH =
+        dayPadY * 2 +
+        52 +
+        54 +
+        24 +
+        verbalLines.length * lineH +
+        24 +
+        writtenLines.length * lineH +
+        24 +
+        noteLines.length * lineH;
+      const cardX = contentX;
+      const cardY = y;
+
+      fillRoundRect(ctx, cardX, cardY, contentW, cardH, 18, "rgba(243, 247, 245, 0.92)");
+
+      let cy = cardY + dayPadY + 14;
+      ctx.fillStyle = "#0f1c1a";
+      ctx.font = "800 22px Vazirmatn, Tahoma, sans-serif";
+      ctx.textAlign = "right";
+      ctx.fillText(day.label, cardX + contentW - 22, cy);
+
+      cy += 40;
+      ctx.textAlign = "right";
+      ctx.font = "700 15px Vazirmatn, Tahoma, sans-serif";
+      ctx.fillStyle = "#6b807a";
+      ctx.fillText("ساعت جلسه", cardX + contentW - 22, cy - 12);
+      ctx.font = "800 20px Vazirmatn, Tahoma, sans-serif";
+      ctx.fillStyle = "#0f1c1a";
+      ctx.fillText(entry.time ? toFaDigits(entry.time) : "—", cardX + contentW - 22, cy + 14);
+
+      const drawGroup = (groupTitle, lines, hasPeople) => {
+        cy += 32;
+        ctx.fillStyle = "#6b807a";
+        ctx.font = "700 16px Vazirmatn, Tahoma, sans-serif";
+        ctx.textAlign = "right";
+        ctx.fillText(groupTitle, cardX + contentW - 22, cy);
+        cy += 24;
+        ctx.fillStyle = hasPeople ? "#0f1c1a" : "#6b807a";
+        ctx.font = "600 17px Vazirmatn, Tahoma, sans-serif";
+        for (const line of lines) {
+          ctx.fillText(line, cardX + contentW - 22, cy);
+          cy += lineH;
+        }
+        cy -= 8;
+      };
+
+      drawGroup("دیلی شفاهی", verbalLines, resolveMeetingPeople(entry.verbalIds).length > 0);
+      drawGroup("دیلی مکتوب", writtenLines, resolveMeetingPeople(entry.writtenIds).length > 0);
+
+      cy += 32;
+      ctx.fillStyle = "#6b807a";
+      ctx.font = "700 16px Vazirmatn, Tahoma, sans-serif";
+      ctx.textAlign = "right";
+      ctx.fillText("توضیحات", cardX + contentW - 22, cy);
+
+      cy += 24;
+      ctx.fillStyle = noteText ? "#0f1c1a" : "#6b807a";
+      ctx.font = "600 17px Vazirmatn, Tahoma, sans-serif";
+      for (const line of noteLines) {
+        ctx.fillText(line, cardX + contentW - 22, cy);
+        cy += lineH;
+      }
+
+      y += cardH + 18;
+    }
+
+    return new Promise((resolve, reject) => {
+      canvas.toBlob((b) => (b ? resolve(b) : reject(new Error("blob"))), "image/png");
+    });
+  }
+
+  function downloadBlob(blob, filename) {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  function sleep(ms) {
+    return new Promise((resolve) => setTimeout(resolve, ms));
+  }
+
+  const MEETING_EXPORT_HINTS = {
+    all: "یک فایل شامل شنبه تا پنجشنبه.",
+    split2: "دو فایل: شنبه تا دوشنبه، و سه‌شنبه تا پنجشنبه.",
+    custom: "برای هر بخش روزها را انتخاب کنید؛ هر بخش یک تصویر جدا می‌شود.",
+  };
+
+  function syncMeetingsExportModeUi() {
+    document.querySelectorAll("#meetings-export-mode .chip").forEach((chip) => {
+      chip.classList.toggle("active", chip.dataset.mode === state.meetingExportMode);
+    });
+    if (el.meetingsExportHint) {
+      el.meetingsExportHint.textContent = MEETING_EXPORT_HINTS[state.meetingExportMode] || "";
+    }
+    const showCustom = state.meetingExportMode === "custom";
+    el.meetingsExportParts?.classList.toggle("hidden", !showCustom);
+    if (showCustom) renderMeetingsExportPartsEditor();
+  }
+
+  function renderMeetingsExportPartsEditor() {
+    if (!el.meetingsExportParts) return;
+    if (!state.meetingExportParts.length) {
+      state.meetingExportParts = defaultMeetingExportParts();
+    }
+
+    el.meetingsExportParts.innerHTML = state.meetingExportParts
+      .map((part, partIndex) => {
+        const selected = new Set(part);
+        return `
+          <div class="meetings-export-part" data-part="${partIndex}">
+            <div class="meetings-export-part-head">
+              <strong>بخش ${toFaDigits(partIndex + 1)}</strong>
+              ${
+                state.meetingExportParts.length > 1
+                  ? `<button type="button" class="btn ghost compact meetings-export-remove-part" data-part="${partIndex}">حذف بخش</button>`
+                  : ""
+              }
+            </div>
+            <div class="chip-group" role="group" aria-label="روزهای بخش ${toFaDigits(partIndex + 1)}">
+              ${MEETING_DAYS.map((day) => {
+                const active = selected.has(day.key);
+                return `<button type="button" class="chip${active ? " active" : ""}" data-part="${partIndex}" data-day="${day.key}">${day.label}</button>`;
+              }).join("")}
+            </div>
+          </div>`;
+      })
+      .join("");
+
+    el.meetingsExportParts.innerHTML += `
+      <button type="button" class="btn ghost compact" id="meetings-export-add-part">+ بخش جدید</button>`;
+
+    el.meetingsExportParts.querySelectorAll(".chip[data-day]").forEach((chip) => {
+      chip.addEventListener("click", () => {
+        const partIndex = Number(chip.dataset.part);
+        const dayKey = chip.dataset.day;
+        const part = state.meetingExportParts[partIndex];
+        if (!part) return;
+        if (part.includes(dayKey)) {
+          state.meetingExportParts[partIndex] = part.filter((k) => k !== dayKey);
+        } else {
+          state.meetingExportParts = state.meetingExportParts.map((p, i) =>
+            i === partIndex ? [...p, dayKey] : p.filter((k) => k !== dayKey)
+          );
+          // keep day order as MEETING_DAYS order
+          state.meetingExportParts[partIndex] = MEETING_DAYS.map((d) => d.key).filter((k) =>
+            state.meetingExportParts[partIndex].includes(k)
+          );
+        }
+        renderMeetingsExportPartsEditor();
+      });
+    });
+
+    el.meetingsExportParts.querySelectorAll(".meetings-export-remove-part").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const partIndex = Number(btn.dataset.part);
+        if (state.meetingExportParts.length <= 1) return;
+        state.meetingExportParts = state.meetingExportParts.filter((_, i) => i !== partIndex);
+        renderMeetingsExportPartsEditor();
+      });
+    });
+
+    el.meetingsExportParts.querySelector("#meetings-export-add-part")?.addEventListener("click", () => {
+      state.meetingExportParts.push([]);
+      renderMeetingsExportPartsEditor();
+    });
+  }
+
+  function openMeetingsExportModal() {
+    if (!getActiveTeam()) {
+      showToast("ابتدا یک تیم بسازید");
+      return;
+    }
+    syncMeetingsExportModeUi();
+    el.meetingsExportModal.showModal();
+  }
+
   async function exportMeetingsImage() {
     const team = getActiveTeam();
     if (!team) {
@@ -2062,155 +2332,60 @@
       return;
     }
 
-    const btn = document.getElementById("btn-export-meetings");
+    const parts = getMeetingExportParts();
+    if (!parts.length) {
+      showToast("حداقل یک بخش با روز انتخاب‌شده لازم است");
+      return;
+    }
+
+    const btn = document.getElementById("meetings-export-confirm");
+    const triggerBtn = document.getElementById("btn-export-meetings");
     const prevLabel = btn?.textContent;
     if (btn) {
       btn.disabled = true;
       btn.textContent = "در حال ساخت…";
     }
+    if (triggerBtn) triggerBtn.disabled = true;
 
     try {
       await document.fonts.ready;
 
       const meetings = ensureTeamMeetings(team);
       const teamName = team.name || "تیم";
-      const title = `جلسات دیلی ${teamName}`;
-      const width = 1100;
-      const pad = 48;
-      const height = measureMeetingsExportHeight(meetings);
-      const dpr = Math.min(2, window.devicePixelRatio || 1);
-      const canvas = document.createElement("canvas");
-      canvas.width = Math.round(width * dpr);
-      canvas.height = Math.round(height * dpr);
-      const ctx = canvas.getContext("2d");
-      ctx.scale(dpr, dpr);
-      ctx.direction = "rtl";
-      ctx.textBaseline = "middle";
+      const safeTeam = teamName.replace(/[\\/:*?"<>|]+/g, "-").trim() || "team";
+      const dateStamp = new Date().toISOString().slice(0, 10);
+      const multi = parts.length > 1;
 
-      const bg = ctx.createLinearGradient(0, 0, width, height);
-      bg.addColorStop(0, "#d7ebe3");
-      bg.addColorStop(0.45, "#eef6f2");
-      bg.addColorStop(1, "#f7fbf9");
-      ctx.fillStyle = bg;
-      ctx.fillRect(0, 0, width, height);
-
-      ctx.fillStyle = "rgba(15, 118, 110, 0.08)";
-      ctx.beginPath();
-      ctx.ellipse(180, 80, 220, 120, 0, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.fillStyle = "rgba(15, 118, 110, 0.05)";
-      ctx.beginPath();
-      ctx.ellipse(width - 160, 140, 200, 110, 0, 0, Math.PI * 2);
-      ctx.fill();
-
-      fillRoundRect(ctx, pad, pad, width - pad * 2, height - pad * 2, 28, "rgba(255,255,255,0.82)");
-
-      const contentX = pad + 36;
-      const contentW = width - pad * 2 - 72;
-      let y = pad + 48;
-
-      ctx.fillStyle = "#0f1c1a";
-      ctx.font = "800 28px Vazirmatn, Tahoma, sans-serif";
-      ctx.textAlign = "center";
-      ctx.fillText(title, width / 2, y);
-
-      y += 52;
-
-      const dayPadY = 22;
-      const lineH = 22;
-      const textMaxW = contentW - 44;
-
-      for (const day of MEETING_DAYS) {
-        const entry = pruneMeetingIds(meetings[day.key] || emptyMeetingDay());
-        const noteText = (entry.note || "").trim();
-        ctx.font = "600 14px Vazirmatn, Tahoma, sans-serif";
-        const noteLines = noteText ? wrapCanvasText(ctx, noteText, textMaxW) : ["—"];
-        const verbalLines = wrapCanvasText(ctx, meetingPeopleLabel(entry.verbalIds), textMaxW);
-        const writtenLines = wrapCanvasText(ctx, meetingPeopleLabel(entry.writtenIds), textMaxW);
-        const cardH =
-          dayPadY * 2 +
-          46 +
-          46 +
-          20 +
-          verbalLines.length * lineH +
-          20 +
-          writtenLines.length * lineH +
-          20 +
-          noteLines.length * lineH;
-        const cardX = contentX;
-        const cardY = y;
-
-        fillRoundRect(ctx, cardX, cardY, contentW, cardH, 18, "rgba(243, 247, 245, 0.92)");
-
-        let cy = cardY + dayPadY + 12;
-        ctx.fillStyle = "#0f1c1a";
-        ctx.font = "800 18px Vazirmatn, Tahoma, sans-serif";
-        ctx.textAlign = "right";
-        ctx.fillText(day.label, cardX + contentW - 22, cy);
-
-        cy += 34;
-        ctx.textAlign = "right";
-        ctx.font = "700 12px Vazirmatn, Tahoma, sans-serif";
-        ctx.fillStyle = "#6b807a";
-        ctx.fillText("ساعت جلسه", cardX + contentW - 22, cy - 10);
-        ctx.font = "800 16px Vazirmatn, Tahoma, sans-serif";
-        ctx.fillStyle = "#0f1c1a";
-        ctx.fillText(entry.time ? toFaDigits(entry.time) : "—", cardX + contentW - 22, cy + 12);
-
-        const drawGroup = (title, lines, hasPeople) => {
-          cy += 28;
-          ctx.fillStyle = "#6b807a";
-          ctx.font = "700 13px Vazirmatn, Tahoma, sans-serif";
-          ctx.textAlign = "right";
-          ctx.fillText(title, cardX + contentW - 22, cy);
-          cy += 20;
-          ctx.fillStyle = hasPeople ? "#0f1c1a" : "#6b807a";
-          ctx.font = "600 14px Vazirmatn, Tahoma, sans-serif";
-          for (const line of lines) {
-            ctx.fillText(line, cardX + contentW - 22, cy);
-            cy += lineH;
-          }
-          cy -= 8;
-        };
-
-        drawGroup("دیلی شفاهی", verbalLines, resolveMeetingPeople(entry.verbalIds).length > 0);
-        drawGroup("دیلی مکتوب", writtenLines, resolveMeetingPeople(entry.writtenIds).length > 0);
-
-        cy += 28;
-        ctx.fillStyle = "#6b807a";
-        ctx.font = "700 13px Vazirmatn, Tahoma, sans-serif";
-        ctx.textAlign = "right";
-        ctx.fillText("توضیحات", cardX + contentW - 22, cy);
-
-        cy += 20;
-        ctx.fillStyle = noteText ? "#0f1c1a" : "#6b807a";
-        ctx.font = "600 14px Vazirmatn, Tahoma, sans-serif";
-        for (const line of noteLines) {
-          ctx.fillText(line, cardX + contentW - 22, cy);
-          cy += lineH;
-        }
-
-        y += cardH + 16;
+      for (let i = 0; i < parts.length; i++) {
+        const days = meetingDaysFromKeys(parts[i]);
+        if (!days.length) continue;
+        const rangeLabel = meetingPartLabel(days);
+        const title = multi
+          ? `جلسات دیلی ${teamName} — ${rangeLabel}`
+          : `جلسات دیلی ${teamName}`;
+        const blob = await renderMeetingsExportBlob(meetings, days, title);
+        const partSlug = days.map((d) => d.key).join("-");
+        const filename = multi
+          ? `barnamino-meetings-${safeTeam}-${partSlug}-${dateStamp}.png`
+          : `barnamino-meetings-${safeTeam}-${dateStamp}.png`;
+        downloadBlob(blob, filename);
+        if (i < parts.length - 1) await sleep(350);
       }
 
-      const blob = await new Promise((resolve, reject) => {
-        canvas.toBlob((b) => (b ? resolve(b) : reject(new Error("blob"))), "image/png");
-      });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      const safeTeam = teamName.replace(/[\\/:*?"<>|]+/g, "-").trim() || "team";
-      a.href = url;
-      a.download = `barnamino-meetings-${safeTeam}-${new Date().toISOString().slice(0, 10)}.png`;
-      a.click();
-      URL.revokeObjectURL(url);
-      showToast("تصویر جلسات دیلی ذخیره شد");
+      el.meetingsExportModal.close();
+      showToast(
+        multi
+          ? `${toFaDigits(parts.length)} تصویر جلسات دیلی ذخیره شد`
+          : "تصویر جلسات دیلی ذخیره شد"
+      );
     } catch {
       showToast("ساخت تصویر ممکن نشد");
     } finally {
       if (btn) {
         btn.disabled = false;
-        btn.textContent = prevLabel || "ذخیره تصویر";
+        btn.textContent = prevLabel || "ذخیره";
       }
+      if (triggerBtn) triggerBtn.disabled = false;
     }
   }
 
@@ -2657,7 +2832,20 @@
     document.getElementById("btn-delete-person").addEventListener("click", deleteSelectedPerson);
     document.getElementById("btn-export").addEventListener("click", exportJson);
     document.getElementById("btn-export-board").addEventListener("click", exportBoardImage);
-    document.getElementById("btn-export-meetings").addEventListener("click", exportMeetingsImage);
+    document.getElementById("btn-export-meetings").addEventListener("click", openMeetingsExportModal);
+    document.getElementById("meetings-export-close").addEventListener("click", () => {
+      el.meetingsExportModal.close();
+    });
+    document.getElementById("meetings-export-confirm").addEventListener("click", exportMeetingsImage);
+    document.querySelectorAll("#meetings-export-mode .chip").forEach((chip) => {
+      chip.addEventListener("click", () => {
+        state.meetingExportMode = chip.dataset.mode;
+        if (state.meetingExportMode === "custom" && !state.meetingExportParts.length) {
+          state.meetingExportParts = defaultMeetingExportParts();
+        }
+        syncMeetingsExportModeUi();
+      });
+    });
     document.getElementById("btn-who-now").addEventListener("click", openNowModal);
     document.getElementById("now-close").addEventListener("click", () => el.nowModal.close());
     document.getElementById("now-refresh").addEventListener("click", renderNowModal);

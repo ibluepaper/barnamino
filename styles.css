@@ -1634,6 +1634,36 @@ main {
   animation: rise 0.3s var(--ease);
 }
 
+.meetings-export-card {
+  width: min(460px, 100%);
+}
+
+.meetings-export-parts {
+  display: grid;
+  gap: 0.75rem;
+  margin: 0.85rem 0 0.25rem;
+}
+
+.meetings-export-part {
+  padding: 0.75rem 0.85rem;
+  border-radius: 12px;
+  border: 1px solid rgba(15, 28, 26, 0.08);
+  background: rgba(243, 247, 245, 0.7);
+  display: grid;
+  gap: 0.55rem;
+}
+
+.meetings-export-part-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.meetings-export-part-head strong {
+  font-size: 0.88rem;
+}
+
 .modal-card h3 {
   margin: 0 0 1rem;
 }
