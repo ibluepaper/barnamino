@@ -314,6 +314,21 @@ main {
   flex-wrap: wrap;
 }
 
+.team-capacity {
+  margin: 0;
+  padding: 0.55rem 0.75rem;
+  border-radius: 10px;
+  background: rgba(15, 118, 110, 0.08);
+  border: 1px solid rgba(15, 118, 110, 0.14);
+  color: var(--muted);
+  font-size: 0.88rem;
+}
+
+.team-capacity strong {
+  color: var(--teal-deep);
+  font-weight: 700;
+}
+
 .person-teams-row {
   display: flex;
   flex-direction: column;
@@ -323,6 +338,32 @@ main {
   background: rgba(15, 118, 110, 0.06);
   border: 1px solid rgba(15, 118, 110, 0.12);
   border-radius: 14px;
+}
+
+.person-hours {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.55rem 1.1rem;
+  margin: 0 0 1rem;
+  padding: 0.7rem 1rem;
+  border-radius: 12px;
+  background: rgba(15, 28, 26, 0.04);
+  border: 1px solid rgba(15, 28, 26, 0.06);
+  color: var(--muted);
+  font-size: 0.95rem;
+}
+
+.person-hours strong {
+  color: var(--ink);
+  font-weight: 700;
+}
+
+.person-hours .hours-split.office strong {
+  color: var(--office);
+}
+
+.person-hours .hours-split.remote strong {
+  color: var(--remote);
 }
 
 .person-teams {

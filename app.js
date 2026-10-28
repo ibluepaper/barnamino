@@ -60,6 +60,8 @@
     personColor: document.getElementById("person-color"),
     editorSwatch: document.getElementById("editor-swatch"),
     personTeams: document.getElementById("person-teams"),
+    personHours: document.getElementById("person-hours"),
+    teamCapacity: document.getElementById("team-capacity"),
     overlapPeople: document.getElementById("overlap-people"),
     overlapResults: document.getElementById("overlap-results"),
     filterHint: document.getElementById("filter-hint"),
@@ -124,6 +126,38 @@
 
   function countSlots(person) {
     return DAYS.reduce((n, d) => n + (person.schedule[d.key]?.length || 0), 0);
+  }
+
+  function slotDurationMinutes(slot) {
+    const mins = toMinutes(slot.end) - toMinutes(slot.start);
+    return mins > 0 ? mins : 0;
+  }
+
+  function totalScheduleMinutes(person, type = null) {
+    return DAYS.reduce((sum, d) => {
+      const slots = person.schedule[d.key] || [];
+      return sum + slots.reduce((s, slot) => {
+        if (type && slot.type !== type) return s;
+        return s + slotDurationMinutes(slot);
+      }, 0);
+    }, 0);
+  }
+
+  function formatHoursTotal(mins) {
+    if (mins <= 0) return "۰ ساعت";
+    const h = Math.floor(mins / 60);
+    const m = mins % 60;
+    if (!h) return `${toFaDigits(m)} دقیقه`;
+    if (!m) return `${toFaDigits(h)} ساعت`;
+    return `${toFaDigits(h)} ساعت و ${toFaDigits(m)} دقیقه`;
+  }
+
+  function peopleInTeam(teamId) {
+    return state.people.filter((p) => p.teamIds.includes(teamId));
+  }
+
+  function teamCapacityMinutes(teamId) {
+    return peopleInTeam(teamId).reduce((sum, p) => sum + totalScheduleMinutes(p), 0);
   }
 
   function dayKeyFromDate(date = new Date()) {
@@ -842,10 +876,18 @@
     return { selected, byDay, total };
   }
 
+  function renderTeamCapacity() {
+    if (!el.teamCapacity) return;
+    const teamId = state.activeTeamId;
+    const hours = formatHoursTotal(teamId ? teamCapacityMinutes(teamId) : 0);
+    el.teamCapacity.innerHTML = `ظرفیت تیم: <strong><bdi>${hours}</bdi></strong> در هفته`;
+  }
+
   function renderPeopleList() {
     const people = activePeople();
     el.peopleList.innerHTML = "";
     el.peopleEmpty.classList.toggle("hidden", people.length > 0);
+    renderTeamCapacity();
     if (!people.length) {
       el.peopleEmpty.textContent = state.teams.length
         ? "در این تیم هنوز کسی نیست. فرد جدید بسازید یا عضو موجود اضافه کنید."
@@ -860,11 +902,12 @@
       const multi = person.teamIds.length > 1
         ? `<span class="multi-team-hint">${toFaDigits(person.teamIds.length)} تیم</span>`
         : "";
+      const hours = formatHoursTotal(totalScheduleMinutes(person));
       btn.innerHTML = `
         <span class="dot" style="background:${person.color}"></span>
         <span class="meta">
           <strong>${escapeHtml(person.name)}</strong>
-          <span>${toFaDigits(countSlots(person))} بازه در هفته${multi ? " · " : ""}${multi}</span>
+          <span>${hours} در هفته · ${toFaDigits(countSlots(person))} بازه${multi ? " · " : ""}${multi}</span>
         </span>
       `;
       btn.addEventListener("click", () => {
@@ -914,6 +957,16 @@
     el.personName.value = person.name;
     el.personColor.value = person.color;
     el.editorSwatch.style.background = person.color;
+    if (el.personHours) {
+      const total = formatHoursTotal(totalScheduleMinutes(person));
+      const office = formatHoursTotal(totalScheduleMinutes(person, "office"));
+      const remote = formatHoursTotal(totalScheduleMinutes(person, "remote"));
+      el.personHours.innerHTML = `
+        <span>مجموع: <strong><bdi>${total}</bdi></strong></span>
+        <span class="hours-split office">حضوری: <strong><bdi>${office}</bdi></strong></span>
+        <span class="hours-split remote">دورکاری: <strong><bdi>${remote}</bdi></strong></span>
+      `;
+    }
     renderPersonTeams();
     renderWeekGrid();
   }
@@ -933,7 +986,7 @@
     for (const team of state.teams) {
       const opt = document.createElement("option");
       opt.value = team.id;
-      const count = state.people.filter((p) => p.teamIds.includes(team.id)).length;
+      const count = peopleInTeam(team.id).length;
       opt.textContent = `${team.name} (${toFaDigits(count)})`;
       if (team.id === state.activeTeamId) opt.selected = true;
       select.appendChild(opt);
@@ -949,7 +1002,7 @@
     for (const team of state.teams) {
       const li = document.createElement("li");
       li.className = `team-row${team.id === state.activeTeamId ? " active" : ""}`;
-      const count = state.people.filter((p) => p.teamIds.includes(team.id)).length;
+      const count = peopleInTeam(team.id).length;
       li.innerHTML = `
         <input type="text" class="input team-name-input" value="${escapeHtml(team.name)}" maxlength="40" aria-label="نام تیم" />
         <span class="team-count">${toFaDigits(count)} نفر</span>
