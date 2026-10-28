@@ -1533,6 +1533,260 @@
     showToast("فایل JSON ذخیره شد");
   }
 
+  function roundRectPath(ctx, x, y, w, h, r) {
+    const radius = Math.min(r, w / 2, h / 2);
+    ctx.beginPath();
+    ctx.moveTo(x + radius, y);
+    ctx.arcTo(x + w, y, x + w, y + h, radius);
+    ctx.arcTo(x + w, y + h, x, y + h, radius);
+    ctx.arcTo(x, y + h, x, y, radius);
+    ctx.arcTo(x, y, x + w, y, radius);
+    ctx.closePath();
+  }
+
+  function fillRoundRect(ctx, x, y, w, h, r, fill) {
+    roundRectPath(ctx, x, y, w, h, r);
+    ctx.fillStyle = fill;
+    ctx.fill();
+  }
+
+  function measureBoardExportHeight(people, days) {
+    const pad = 48;
+    const header = 88;
+    const legend = 36;
+    const footer = 28;
+    const dayTitle = 36;
+    const axis = 28;
+    const row = 44;
+    const dayPad = 28;
+    const dayGap = 20;
+    let h = pad + header + legend;
+    for (const day of days) {
+      const anySlots = people.some((p) => (p.schedule[day.key] || []).length);
+      const body = anySlots ? people.length * row : 40;
+      h += dayPad * 2 + dayTitle + axis + body + dayGap;
+    }
+    return h + footer + pad;
+  }
+
+  async function exportBoardImage() {
+    const people = activePeople();
+    if (!people.length) {
+      showToast("اول افراد تیم را بسازید");
+      return;
+    }
+
+    const btn = document.getElementById("btn-export-board");
+    const prevLabel = btn?.textContent;
+    if (btn) {
+      btn.disabled = true;
+      btn.textContent = "در حال ساخت…";
+    }
+
+    try {
+      await document.fonts.ready;
+
+      const days =
+        state.boardDayFilter === "all"
+          ? DAYS
+          : DAYS.filter((d) => d.key === state.boardDayFilter);
+      const team = getActiveTeam();
+      const teamName = team?.name || "تیم";
+      const title = `برنامه تیم ${teamName}`;
+
+      const width = 1400;
+      const pad = 48;
+      const height = measureBoardExportHeight(people, days);
+      const dpr = Math.min(2, window.devicePixelRatio || 1);
+      const canvas = document.createElement("canvas");
+      canvas.width = Math.round(width * dpr);
+      canvas.height = Math.round(height * dpr);
+      const ctx = canvas.getContext("2d");
+      ctx.scale(dpr, dpr);
+      ctx.direction = "rtl";
+      ctx.textBaseline = "middle";
+      ctx.font = "700 16px Vazirmatn, Tahoma, sans-serif";
+
+      const bg = ctx.createLinearGradient(0, 0, width, height);
+      bg.addColorStop(0, "#d7ebe3");
+      bg.addColorStop(0.45, "#eef6f2");
+      bg.addColorStop(1, "#f7fbf9");
+      ctx.fillStyle = bg;
+      ctx.fillRect(0, 0, width, height);
+
+      ctx.fillStyle = "rgba(15, 118, 110, 0.08)";
+      ctx.beginPath();
+      ctx.ellipse(180, 80, 220, 120, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = "rgba(15, 118, 110, 0.05)";
+      ctx.beginPath();
+      ctx.ellipse(width - 160, 140, 200, 110, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      fillRoundRect(ctx, pad, pad, width - pad * 2, height - pad * 2, 28, "rgba(255,255,255,0.82)");
+
+      const contentX = pad + 36;
+      const contentW = width - pad * 2 - 72;
+      let y = pad + 48;
+
+      ctx.fillStyle = "#0f1c1a";
+      ctx.font = "800 28px Vazirmatn, Tahoma, sans-serif";
+      ctx.textAlign = "center";
+      ctx.fillText(title, width / 2, y);
+
+      y += 52;
+
+      const legendItems = [
+        { label: "حضوری", color: "#0f766e" },
+        { label: "دورکاری", color: "#d97706" },
+      ];
+      let legendX = contentX + contentW;
+      ctx.font = "700 13px Vazirmatn, Tahoma, sans-serif";
+      ctx.textAlign = "right";
+      for (const item of legendItems) {
+        const labelW = ctx.measureText(item.label).width;
+        fillRoundRect(ctx, legendX - 14, y - 7, 14, 14, 4, item.color);
+        ctx.fillStyle = "#6b807a";
+        ctx.fillText(item.label, legendX - 22, y);
+        legendX -= labelW + 48;
+      }
+
+      y += 36;
+
+      const personCol = 230;
+      const trackGap = 14;
+      const hourMarks = [6, 9, 12, 15, 18, 21];
+      const maxNameChars = 22;
+
+      for (const day of days) {
+        const anySlots = people.some((p) => (p.schedule[day.key] || []).length);
+        const rowsH = anySlots ? people.length * 44 : 40;
+        const cardH = 28 + 36 + 28 + rowsH + 28;
+        const cardX = contentX;
+        const cardY = y;
+
+        fillRoundRect(ctx, cardX, cardY, contentW, cardH, 18, "rgba(243, 247, 245, 0.92)");
+
+        let cy = cardY + 28;
+        ctx.fillStyle = "#0f1c1a";
+        ctx.font = "800 18px Vazirmatn, Tahoma, sans-serif";
+        ctx.textAlign = "right";
+        ctx.fillText(day.label, cardX + contentW - 22, cy);
+
+        cy += 34;
+        const trackX = cardX + 22;
+        const trackW = contentW - 44 - personCol - trackGap;
+        const trackRight = trackX + trackW;
+
+        ctx.fillStyle = "#6b807a";
+        ctx.font = "600 12px Vazirmatn, Tahoma, sans-serif";
+        ctx.textAlign = "center";
+        for (const h of hourMarks) {
+          const right = ((h * 60 - BOARD_START) / BOARD_SPAN) * trackW;
+          const hx = trackRight - right;
+          ctx.fillText(toFaDigits(String(h).padStart(2, "0")), hx, cy);
+        }
+
+        cy += 22;
+
+        if (!anySlots) {
+          ctx.fillStyle = "#6b807a";
+          ctx.font = "600 14px Vazirmatn, Tahoma, sans-serif";
+          ctx.textAlign = "right";
+          ctx.fillText("برای این روز بازه‌ای ثبت نشده", cardX + contentW - 22, cy + 10);
+        } else {
+          for (const person of people) {
+            const slots = person.schedule[day.key] || [];
+            const nameX = cardX + contentW - 22;
+            const trackY = cy;
+
+            ctx.beginPath();
+            ctx.fillStyle = person.color || "#0f766e";
+            ctx.arc(nameX - 5, trackY + 14, 5, 0, Math.PI * 2);
+            ctx.fill();
+
+            ctx.fillStyle = "#0f1c1a";
+            ctx.font = "700 14px Vazirmatn, Tahoma, sans-serif";
+            ctx.textAlign = "right";
+            const name =
+              person.name.length > maxNameChars
+                ? `${person.name.slice(0, maxNameChars - 1)}…`
+                : person.name;
+            ctx.fillText(name, nameX - 16, trackY + 14);
+
+            fillRoundRect(ctx, trackX, trackY, trackW, 28, 10, "rgba(255,255,255,0.78)");
+            ctx.strokeStyle = "rgba(15, 28, 26, 0.06)";
+            ctx.lineWidth = 1;
+            roundRectPath(ctx, trackX, trackY, trackW, 28, 10);
+            ctx.stroke();
+
+            ctx.strokeStyle = "rgba(15, 28, 26, 0.05)";
+            for (let i = 1; i < 16; i++) {
+              const gx = trackRight - (i / 16) * trackW;
+              ctx.beginPath();
+              ctx.moveTo(gx, trackY + 2);
+              ctx.lineTo(gx, trackY + 26);
+              ctx.stroke();
+            }
+
+            for (const slot of slots) {
+              const start = Math.max(toMinutes(slot.start), BOARD_START);
+              const end = Math.min(toMinutes(slot.end), BOARD_END);
+              if (end <= start) continue;
+              const rightRatio = (start - BOARD_START) / BOARD_SPAN;
+              const widthRatio = (end - start) / BOARD_SPAN;
+              const barW = Math.max(widthRatio * trackW, 4);
+              const barX = trackRight - rightRatio * trackW - barW;
+              const grad = ctx.createLinearGradient(barX, trackY, barX + barW, trackY + 28);
+              if (slot.type === "remote") {
+                grad.addColorStop(0, "#d97706");
+                grad.addColorStop(1, "#92400e");
+              } else {
+                grad.addColorStop(0, "#0f766e");
+                grad.addColorStop(1, "#0a4f4a");
+              }
+              fillRoundRect(ctx, barX, trackY + 4, barW, 20, 7, grad);
+
+              if (barW > 58) {
+                ctx.fillStyle = "#fff";
+                ctx.font = "700 11px Vazirmatn, Tahoma, sans-serif";
+                ctx.textAlign = "center";
+                ctx.fillText(
+                  `${toFaDigits(slot.start)}–${toFaDigits(slot.end)}`,
+                  barX + barW / 2,
+                  trackY + 14
+                );
+              }
+            }
+
+            cy += 44;
+          }
+        }
+
+        y += cardH + 20;
+      }
+
+      const blob = await new Promise((resolve, reject) => {
+        canvas.toBlob((b) => (b ? resolve(b) : reject(new Error("blob"))), "image/png");
+      });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      const safeTeam = teamName.replace(/[\\/:*?"<>|]+/g, "-").trim() || "team";
+      a.href = url;
+      a.download = `barnamino-board-${safeTeam}-${new Date().toISOString().slice(0, 10)}.png`;
+      a.click();
+      URL.revokeObjectURL(url);
+      showToast("تصویر برنامه ذخیره شد");
+    } catch {
+      showToast("ساخت تصویر ممکن نشد");
+    } finally {
+      if (btn) {
+        btn.disabled = false;
+        btn.textContent = prevLabel || "ذخیره تصویر";
+      }
+    }
+  }
+
   function importJson(file) {
     const reader = new FileReader();
     reader.onload = async () => {
@@ -1604,6 +1858,7 @@
     document.getElementById("btn-add-existing").addEventListener("click", openExistingModal);
     document.getElementById("btn-delete-person").addEventListener("click", deleteSelectedPerson);
     document.getElementById("btn-export").addEventListener("click", exportJson);
+    document.getElementById("btn-export-board").addEventListener("click", exportBoardImage);
     document.getElementById("btn-who-now").addEventListener("click", openNowModal);
     document.getElementById("now-close").addEventListener("click", () => el.nowModal.close());
     document.getElementById("now-refresh").addEventListener("click", renderNowModal);
