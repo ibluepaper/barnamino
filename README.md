@@ -6,13 +6,14 @@ Plain HTML, CSS, and JavaScript. Open `index.html` in a browser.
 
 ## Features
 
+- Define **multiple teams** and switch between them (a person can belong to several teams)
 - Define team members and assign each a color
 - Weekly schedule (Saturday–Friday) with multiple time ranges per day
 - Mark each range as **on-site** (`office`) or **remote**
 - Find **shared time ranges** across selected people (with presence-type filters)
 - **Lookup by time**: pick a clock time and one or more days to see who’s scheduled then
-- **Team board**: a single timeline view of everyone
-- **Who’s working now?**: people currently on the clock, and until when
+- **Team board**: a single timeline view of everyone on the active team
+- **Who’s working now?**: people currently on the clock (active team), and until when
 - Persist to `data.json`, plus JSON import / export
 
 ## Run
@@ -30,14 +31,20 @@ Without file permission, data is still kept in the browser’s `localStorage`. A
 
 ```json
 {
-  "version": 1,
+  "version": 2,
   "app": "barnamino",
   "exportedAt": "2026-10-28T07:34:50.305Z",
+  "teams": [
+    { "id": "…", "name": "تیم محصول" },
+    { "id": "…", "name": "تیم پشتیبانی" }
+  ],
+  "activeTeamId": "…",
   "people": [
     {
       "id": "…",
       "name": "Sara",
       "color": "#0f766e",
+      "teamIds": ["…", "…"],
       "schedule": {
         "sat": [{ "start": "09:00", "end": "17:00", "type": "office" }],
         "sun": [{ "start": "10:00", "end": "14:00", "type": "remote" }],
@@ -54,9 +61,14 @@ Without file permission, data is still kept in the browser’s `localStorage`. A
 
 | Field | Meaning |
 |-------|---------|
+| `teams` | List of teams (`id`, `name`) |
+| `activeTeamId` | Currently selected team |
+| `teamIds` | Teams this person belongs to (one or more) |
 | `start` / `end` | Start and end time (`HH:MM`) |
 | `type` | `office` = on-site · `remote` = remote |
 | Day keys | `sat` … `fri` (Saturday–Friday) |
+
+Older `version: 1` files (no `teams`) are migrated automatically into a default team.
 
 ### Import / export
 
@@ -67,11 +79,12 @@ Without file permission, data is still kept in the browser’s `localStorage`. A
 
 | Section | Purpose |
 |---------|---------|
-| People & schedule | Add people and edit weekly ranges |
-| Team board | Timeline overview for the whole team |
-| Shared ranges | Select people and compute overlapping times |
-| Lookup by time | Pick a time + days; list who’s available then |
-| Who’s working now? | People currently working right now |
+| Team switcher | Pick the active team; open **Manage teams** to create / rename / delete |
+| People & schedule | Members of the active team; edit schedule and multi-team membership |
+| Team board | Timeline overview for the active team |
+| Shared ranges | Select people on the active team and compute overlapping times |
+| Lookup by time | Pick a time + days; list who’s available then (active team) |
+| Who’s working now? | People currently working right now (active team) |
 
 ## Project files
 
@@ -89,4 +102,5 @@ barnamino/
 
 - The current weekday is based on your system clock.
 - The team board timeline shows roughly 06:00–22:00; ranges outside that window remain fully editable per person.
+- A person’s schedule is shared across all their teams; switching teams only changes who is in view.
 - If file access is lost, click **Allow file save** again.

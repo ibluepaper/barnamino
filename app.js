@@ -36,6 +36,8 @@
   const BOARD_SPAN = BOARD_END - BOARD_START;
 
   const state = {
+    teams: [],
+    activeTeamId: null,
     people: [],
     selectedId: null,
     overlapIds: new Set(),
@@ -57,6 +59,7 @@
     personName: document.getElementById("person-name"),
     personColor: document.getElementById("person-color"),
     editorSwatch: document.getElementById("editor-swatch"),
+    personTeams: document.getElementById("person-teams"),
     overlapPeople: document.getElementById("overlap-people"),
     overlapResults: document.getElementById("overlap-results"),
     filterHint: document.getElementById("filter-hint"),
@@ -78,6 +81,12 @@
     lookupTime: document.getElementById("lookup-time"),
     lookupDays: document.getElementById("lookup-days"),
     lookupResults: document.getElementById("lookup-results"),
+    teamSelect: document.getElementById("team-select"),
+    teamsModal: document.getElementById("teams-modal"),
+    teamsList: document.getElementById("teams-list"),
+    teamNewName: document.getElementById("team-new-name"),
+    existingModal: document.getElementById("existing-modal"),
+    existingList: document.getElementById("existing-list"),
   };
 
   function uid() {
@@ -135,11 +144,40 @@
     return `${day} — ساعت ${time}`;
   }
 
+  function normalizeTeam(t) {
+    return {
+      id: t?.id || uid(),
+      name: (t?.name || "تیم بدون نام").trim() || "تیم بدون نام",
+    };
+  }
+
+  function createDefaultTeam() {
+    return { id: uid(), name: "تیم اصلی" };
+  }
+
+  function getActiveTeam() {
+    return state.teams.find((t) => t.id === state.activeTeamId) || null;
+  }
+
+  function activePeople() {
+    if (!state.activeTeamId) return [];
+    return state.people.filter((p) => p.teamIds.includes(state.activeTeamId));
+  }
+
+  function syncSelectionToActiveTeam() {
+    const people = activePeople();
+    if (!people.some((p) => p.id === state.selectedId)) {
+      state.selectedId = people[0]?.id || null;
+    }
+    const activeIds = new Set(people.map((p) => p.id));
+    state.overlapIds = new Set([...state.overlapIds].filter((id) => activeIds.has(id)));
+  }
+
   function getCurrentlyWorking(date = new Date()) {
     const dayKey = dayKeyFromDate(date);
     const mins = nowMinutes(date);
     const list = [];
-    for (const person of state.people) {
+    for (const person of activePeople()) {
       for (const slot of person.schedule[dayKey] || []) {
         const start = toMinutes(slot.start);
         const end = toMinutes(slot.end);
@@ -169,18 +207,50 @@
 
   function buildPayload() {
     return {
-      version: 1,
+      version: 2,
       app: "barnamino",
       exportedAt: new Date().toISOString(),
+      teams: state.teams,
+      activeTeamId: state.activeTeamId,
       people: state.people,
     };
   }
 
-  function applyPeople(people) {
-    state.people = (people || []).map(normalizePerson);
-    if (!state.people.some((p) => p.id === state.selectedId)) {
-      state.selectedId = state.people[0]?.id || null;
+  function applyData(data) {
+    const peopleRaw = Array.isArray(data?.people) ? data.people : [];
+    let teams = Array.isArray(data?.teams) ? data.teams.map(normalizeTeam) : [];
+
+    if (!teams.length) {
+      const fallback = createDefaultTeam();
+      teams = [fallback];
+      state.teams = teams;
+      state.activeTeamId = fallback.id;
+      state.people = peopleRaw.map((p) =>
+        normalizePerson({ ...p, teamIds: p.teamIds?.length ? p.teamIds : [fallback.id] }, [fallback.id])
+      );
+      syncSelectionToActiveTeam();
+      return;
     }
+
+    state.teams = teams;
+    const teamIds = new Set(teams.map((t) => t.id));
+    const preferred =
+      (data.activeTeamId && teamIds.has(data.activeTeamId) && data.activeTeamId) ||
+      (state.activeTeamId && teamIds.has(state.activeTeamId) && state.activeTeamId) ||
+      teams[0].id;
+    state.activeTeamId = preferred;
+
+    const defaultTeamIds = [preferred];
+    state.people = peopleRaw.map((p) => normalizePerson(p, defaultTeamIds));
+    for (const person of state.people) {
+      person.teamIds = person.teamIds.filter((id) => teamIds.has(id));
+      if (!person.teamIds.length) person.teamIds = [...defaultTeamIds];
+    }
+    syncSelectionToActiveTeam();
+  }
+
+  function applyPeople(people) {
+    applyData({ people, teams: state.teams, activeTeamId: state.activeTeamId });
   }
 
   function saveToLocalStorage() {
@@ -193,7 +263,7 @@
       if (!raw) return false;
       const data = JSON.parse(raw);
       if (!Array.isArray(data.people)) return false;
-      applyPeople(data.people);
+      applyData(data);
       return true;
     } catch {
       return false;
@@ -256,7 +326,7 @@
   async function readHandle(handle) {
     const file = await handle.getFile();
     const text = await file.text();
-    if (!text.trim()) return { people: [] };
+    if (!text.trim()) return { people: [], teams: [] };
     const data = JSON.parse(text);
     if (!Array.isArray(data.people)) throw new Error("ساختار نامعتبر");
     return data;
@@ -280,7 +350,7 @@
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const data = await res.json();
     if (!Array.isArray(data.people)) throw new Error("ساختار نامعتبر");
-    applyPeople(data.people);
+    applyData(data);
     saveToLocalStorage();
   }
 
@@ -360,7 +430,7 @@
       try {
         const fileData = await readHandle(handle);
         if (!state.people.length && fileData.people?.length) {
-          applyPeople(fileData.people);
+          applyData(fileData);
         }
       } catch {
         /* فایل خالی یا نامعتبر — با داده فعلی بازنویسی می‌شود */
@@ -416,7 +486,7 @@
     if (restored && state.fileHandle) {
       try {
         const data = await readHandle(state.fileHandle);
-        applyPeople(data.people);
+        applyData(data);
         saveToLocalStorage();
         return;
       } catch {
@@ -431,10 +501,10 @@
       /* file:// یا نبودن data.json */
     }
 
-    if (!loadFromLocalStorage()) applyPeople([]);
+    if (!loadFromLocalStorage()) applyData({ people: [], teams: [] });
   }
 
-  function normalizePerson(p) {
+  function normalizePerson(p, fallbackTeamIds = []) {
     const schedule = emptySchedule();
     for (const day of DAYS) {
       const slots = Array.isArray(p.schedule?.[day.key]) ? p.schedule[day.key] : [];
@@ -447,10 +517,17 @@
         }))
         .sort((a, b) => toMinutes(a.start) - toMinutes(b.start));
     }
+    let teamIds = Array.isArray(p.teamIds)
+      ? [...new Set(p.teamIds.filter(Boolean))]
+      : [];
+    if (!teamIds.length && fallbackTeamIds.length) {
+      teamIds = [...fallbackTeamIds];
+    }
     return {
       id: p.id || uid(),
       name: (p.name || "بدون نام").trim() || "بدون نام",
       color: p.color || COLORS[0],
+      teamIds,
       schedule,
     };
   }
@@ -463,15 +540,24 @@
   }
 
   function getSelectedPerson() {
-    return state.people.find((p) => p.id === state.selectedId) || null;
+    return activePeople().find((p) => p.id === state.selectedId) || null;
+  }
+
+  function ensureActiveTeam() {
+    if (getActiveTeam()) return true;
+    showToast("ابتدا یک تیم بسازید");
+    openTeamsModal();
+    return false;
   }
 
   function addPerson() {
+    if (!ensureActiveTeam()) return;
     const color = COLORS[state.people.length % COLORS.length];
     const person = {
       id: uid(),
-      name: `فرد ${toFaDigits(state.people.length + 1)}`,
+      name: `فرد ${toFaDigits(activePeople().length + 1)}`,
       color,
+      teamIds: [state.activeTeamId],
       schedule: emptySchedule(),
     };
     state.people.push(person);
@@ -482,16 +568,103 @@
     el.personName.select();
   }
 
+  function addExistingToActiveTeam(personId) {
+    if (!ensureActiveTeam()) return;
+    const person = state.people.find((p) => p.id === personId);
+    if (!person) return;
+    if (!person.teamIds.includes(state.activeTeamId)) {
+      person.teamIds.push(state.activeTeamId);
+    }
+    state.selectedId = person.id;
+    persist();
+    renderExistingList();
+    render();
+    showToast(`«${person.name}» به تیم اضافه شد`);
+  }
+
   function deleteSelectedPerson() {
     const person = getSelectedPerson();
-    if (!person) return;
-    if (!confirm(`«${person.name}» حذف شود؟`)) return;
-    state.people = state.people.filter((p) => p.id !== person.id);
+    if (!person || !state.activeTeamId) return;
+    const inOtherTeams = person.teamIds.some((id) => id !== state.activeTeamId);
+    const msg = inOtherTeams
+      ? `«${person.name}» فقط از این تیم حذف شود؟ (در تیم‌های دیگر می‌ماند)`
+      : `«${person.name}» کاملاً حذف شود؟`;
+    if (!confirm(msg)) return;
+
+    person.teamIds = person.teamIds.filter((id) => id !== state.activeTeamId);
+    if (!person.teamIds.length) {
+      state.people = state.people.filter((p) => p.id !== person.id);
+    }
     state.overlapIds.delete(person.id);
-    state.selectedId = state.people[0]?.id || null;
+    syncSelectionToActiveTeam();
     persist();
     render();
-    showToast("فرد حذف شد");
+    showToast(inOtherTeams ? "از این تیم حذف شد" : "فرد حذف شد");
+  }
+
+  function setPersonTeamMembership(person, teamId, joined) {
+    const has = person.teamIds.includes(teamId);
+    if (joined && !has) person.teamIds.push(teamId);
+    if (!joined && has) {
+      if (person.teamIds.length <= 1) {
+        showToast("هر فرد باید حداقل عضو یک تیم باشد");
+        return false;
+      }
+      person.teamIds = person.teamIds.filter((id) => id !== teamId);
+    }
+    return true;
+  }
+
+  function addTeam(name) {
+    const trimmed = (name || "").trim();
+    if (!trimmed) return null;
+    const team = { id: uid(), name: trimmed };
+    state.teams.push(team);
+    if (!state.activeTeamId) state.activeTeamId = team.id;
+    return team;
+  }
+
+  function renameTeam(teamId, name) {
+    const team = state.teams.find((t) => t.id === teamId);
+    if (!team) return;
+    const trimmed = (name || "").trim();
+    if (!trimmed) return;
+    team.name = trimmed;
+  }
+
+  function deleteTeam(teamId) {
+    if (state.teams.length <= 1) {
+      showToast("حداقل یک تیم باید باقی بماند");
+      return;
+    }
+    const team = state.teams.find((t) => t.id === teamId);
+    if (!team) return;
+    if (!confirm(`تیم «${team.name}» حذف شود؟ اعضای فقطِ این تیم هم حذف می‌شوند.`)) return;
+
+    state.teams = state.teams.filter((t) => t.id !== teamId);
+    state.people = state.people
+      .map((p) => ({
+        ...p,
+        teamIds: p.teamIds.filter((id) => id !== teamId),
+      }))
+      .filter((p) => p.teamIds.length);
+
+    if (state.activeTeamId === teamId) {
+      state.activeTeamId = state.teams[0]?.id || null;
+    }
+    syncSelectionToActiveTeam();
+    persist();
+    render();
+    renderTeamsList();
+    showToast("تیم حذف شد");
+  }
+
+  function switchTeam(teamId) {
+    if (!state.teams.some((t) => t.id === teamId)) return;
+    state.activeTeamId = teamId;
+    syncSelectionToActiveTeam();
+    persist();
+    render();
   }
 
   function updateSelectedMeta() {
@@ -502,6 +675,7 @@
     persist();
     renderPeopleList();
     renderOverlapPicker();
+    renderTeamSwitcher();
     el.editorSwatch.style.background = person.color;
   }
 
@@ -638,7 +812,7 @@
   }
 
   function computeOverlaps() {
-    const selected = state.people.filter((p) => state.overlapIds.has(p.id));
+    const selected = activePeople().filter((p) => state.overlapIds.has(p.id));
     if (selected.length < 2) return null;
 
     const byDay = {};
@@ -669,19 +843,28 @@
   }
 
   function renderPeopleList() {
+    const people = activePeople();
     el.peopleList.innerHTML = "";
-    el.peopleEmpty.classList.toggle("hidden", state.people.length > 0);
+    el.peopleEmpty.classList.toggle("hidden", people.length > 0);
+    if (!people.length) {
+      el.peopleEmpty.textContent = state.teams.length
+        ? "در این تیم هنوز کسی نیست. فرد جدید بسازید یا عضو موجود اضافه کنید."
+        : "ابتدا از «مدیریت تیم‌ها» یک تیم بسازید.";
+    }
 
-    for (const person of state.people) {
+    for (const person of people) {
       const li = document.createElement("li");
       const btn = document.createElement("button");
       btn.type = "button";
       btn.className = `person-item${person.id === state.selectedId ? " active" : ""}`;
+      const multi = person.teamIds.length > 1
+        ? `<span class="multi-team-hint">${toFaDigits(person.teamIds.length)} تیم</span>`
+        : "";
       btn.innerHTML = `
         <span class="dot" style="background:${person.color}"></span>
         <span class="meta">
           <strong>${escapeHtml(person.name)}</strong>
-          <span>${toFaDigits(countSlots(person))} بازه در هفته</span>
+          <span>${toFaDigits(countSlots(person))} بازه در هفته${multi ? " · " : ""}${multi}</span>
         </span>
       `;
       btn.addEventListener("click", () => {
@@ -690,6 +873,32 @@
       });
       li.appendChild(btn);
       el.peopleList.appendChild(li);
+    }
+  }
+
+  function renderPersonTeams() {
+    const person = getSelectedPerson();
+    if (!person || !el.personTeams) return;
+    el.personTeams.innerHTML = "";
+    for (const team of state.teams) {
+      const label = document.createElement("label");
+      const checked = person.teamIds.includes(team.id);
+      label.className = `team-check${checked ? " on" : ""}`;
+      label.innerHTML = `
+        <input type="checkbox" ${checked ? "checked" : ""} />
+        <span>${escapeHtml(team.name)}</span>
+      `;
+      const checkbox = label.querySelector("input");
+      checkbox.addEventListener("change", () => {
+        if (!setPersonTeamMembership(person, team.id, checkbox.checked)) {
+          checkbox.checked = true;
+          return;
+        }
+        syncSelectionToActiveTeam();
+        persist();
+        render();
+      });
+      el.personTeams.appendChild(label);
     }
   }
 
@@ -705,7 +914,103 @@
     el.personName.value = person.name;
     el.personColor.value = person.color;
     el.editorSwatch.style.background = person.color;
+    renderPersonTeams();
     renderWeekGrid();
+  }
+
+  function renderTeamSwitcher() {
+    const select = el.teamSelect;
+    select.innerHTML = "";
+    if (!state.teams.length) {
+      const opt = document.createElement("option");
+      opt.value = "";
+      opt.textContent = "تیمی نیست";
+      select.appendChild(opt);
+      select.disabled = true;
+      return;
+    }
+    select.disabled = false;
+    for (const team of state.teams) {
+      const opt = document.createElement("option");
+      opt.value = team.id;
+      const count = state.people.filter((p) => p.teamIds.includes(team.id)).length;
+      opt.textContent = `${team.name} (${toFaDigits(count)})`;
+      if (team.id === state.activeTeamId) opt.selected = true;
+      select.appendChild(opt);
+    }
+  }
+
+  function renderTeamsList() {
+    el.teamsList.innerHTML = "";
+    if (!state.teams.length) {
+      el.teamsList.innerHTML = `<li class="empty-hint">هنوز تیمی نیست.</li>`;
+      return;
+    }
+    for (const team of state.teams) {
+      const li = document.createElement("li");
+      li.className = `team-row${team.id === state.activeTeamId ? " active" : ""}`;
+      const count = state.people.filter((p) => p.teamIds.includes(team.id)).length;
+      li.innerHTML = `
+        <input type="text" class="input team-name-input" value="${escapeHtml(team.name)}" maxlength="40" aria-label="نام تیم" />
+        <span class="team-count">${toFaDigits(count)} نفر</span>
+        <button type="button" class="btn ghost compact team-activate">فعال</button>
+        <button type="button" class="btn danger ghost compact team-delete">حذف</button>
+      `;
+      const nameInput = li.querySelector(".team-name-input");
+      nameInput.addEventListener("change", () => {
+        renameTeam(team.id, nameInput.value);
+        persist();
+        renderTeamSwitcher();
+        renderTeamsList();
+      });
+      li.querySelector(".team-activate").addEventListener("click", () => {
+        switchTeam(team.id);
+        renderTeamsList();
+      });
+      li.querySelector(".team-delete").addEventListener("click", () => deleteTeam(team.id));
+      el.teamsList.appendChild(li);
+    }
+  }
+
+  function openTeamsModal() {
+    renderTeamsList();
+    el.teamNewName.value = "";
+    el.teamsModal.showModal();
+    el.teamNewName.focus();
+  }
+
+  function renderExistingList() {
+    const candidates = state.people.filter((p) => !p.teamIds.includes(state.activeTeamId));
+    if (!candidates.length) {
+      el.existingList.innerHTML = `<p class="empty-hint">همهٔ افراد همین الان در این تیم هستند، یا فرد دیگری وجود ندارد.</p>`;
+      return;
+    }
+    el.existingList.innerHTML = "";
+    for (const person of candidates) {
+      const row = document.createElement("button");
+      row.type = "button";
+      row.className = "existing-item";
+      const teamNames = person.teamIds
+        .map((id) => state.teams.find((t) => t.id === id)?.name)
+        .filter(Boolean)
+        .join("، ");
+      row.innerHTML = `
+        <span class="dot" style="background:${person.color}"></span>
+        <span class="meta">
+          <strong>${escapeHtml(person.name)}</strong>
+          <span>${teamNames ? `عضو: ${escapeHtml(teamNames)}` : "بدون تیم"}</span>
+        </span>
+        <span class="add-label">افزودن</span>
+      `;
+      row.addEventListener("click", () => addExistingToActiveTeam(person.id));
+      el.existingList.appendChild(row);
+    }
+  }
+
+  function openExistingModal() {
+    if (!ensureActiveTeam()) return;
+    renderExistingList();
+    el.existingModal.showModal();
   }
 
   function renderWeekGrid() {
@@ -780,14 +1085,15 @@
   }
 
   function renderOverlapPicker() {
+    const people = activePeople();
     el.overlapPeople.innerHTML = "";
-    if (!state.people.length) {
+    if (!people.length) {
       el.overlapPeople.innerHTML =
-        '<p class="empty-hint">ابتدا در بخش افراد، اعضای تیم را بسازید.</p>';
+        '<p class="empty-hint">ابتدا در بخش افراد، اعضای این تیم را بسازید.</p>';
       return;
     }
 
-    for (const person of state.people) {
+    for (const person of people) {
       const label = document.createElement("label");
       label.className = `pick-person${state.overlapIds.has(person.id) ? " selected" : ""}`;
       label.innerHTML = `
@@ -829,10 +1135,11 @@
   }
 
   function renderTeamBoard() {
-    if (!state.people.length) {
+    const people = activePeople();
+    if (!people.length) {
       el.teamBoard.innerHTML = `
         <div class="empty-state compact">
-          <h3>هنوز تیمی نیست</h3>
+          <h3>عضوی در این تیم نیست</h3>
           <p>اول افراد و برنامه‌شان را در بخش افراد بسازید.</p>
         </div>
       `;
@@ -864,12 +1171,12 @@
       }
       html += `</div>`;
 
-      const anySlots = state.people.some((p) => (p.schedule[day.key] || []).length);
+      const anySlots = people.some((p) => (p.schedule[day.key] || []).length);
       if (!anySlots) {
         html += `<p class="board-empty-day">برای این روز بازه‌ای ثبت نشده</p>`;
       }
 
-      for (const person of state.people) {
+      for (const person of people) {
         const slots = person.schedule[day.key] || [];
         html += `<div class="board-row">`;
         html += `<div class="board-person"><span class="dot" style="background:${person.color}"></span><span>${escapeHtml(person.name)}</span></div>`;
@@ -899,8 +1206,8 @@
     el.nowClock.textContent = formatClock(now);
     const working = getCurrentlyWorking(now);
 
-    if (!state.people.length) {
-      el.nowList.innerHTML = `<div class="now-empty">هنوز فردی تعریف نشده است.</div>`;
+    if (!activePeople().length) {
+      el.nowList.innerHTML = `<div class="now-empty">در این تیم هنوز فردی تعریف نشده است.</div>`;
       return;
     }
 
@@ -943,7 +1250,7 @@
 
   function findPeopleAtTime(dayKey, mins, mode) {
     const list = [];
-    for (const person of state.people) {
+    for (const person of activePeople()) {
       for (const slot of person.schedule[dayKey] || []) {
         if (slotCoversTime(slot, mins, mode)) {
           list.push({ person, slot });
@@ -964,7 +1271,7 @@
         counts.set(item.person.id, (counts.get(item.person.id) || 0) + 1);
       }
     }
-    return state.people.filter((p) => counts.get(p.id) === days.length);
+    return activePeople().filter((p) => counts.get(p.id) === days.length);
   }
 
   function renderLookupDayChips() {
@@ -1025,11 +1332,11 @@
       return;
     }
 
-    if (!state.people.length) {
+    if (!activePeople().length) {
       el.lookupResults.innerHTML = `
         <div class="empty-state compact">
-          <h3>فردی تعریف نشده</h3>
-          <p>ابتدا از بخش افراد، اعضای تیم را اضافه کنید.</p>
+          <h3>فردی در این تیم نیست</h3>
+          <p>ابتدا از بخش افراد، اعضای این تیم را اضافه کنید.</p>
         </div>
       `;
       return;
@@ -1181,16 +1488,17 @@
         if (!Array.isArray(data.people)) {
           throw new Error("ساختار نامعتبر");
         }
-        applyPeople(data.people);
+        applyData(data);
         state.overlapIds = new Set();
         if (!state.fileHandle) {
           await grantFileAccess();
         }
         await persist();
         render();
+        const n = activePeople().length;
         showToast(
           state.fileHandle
-            ? `${toFaDigits(state.people.length)} نفر وارد و در data.json ذخیره شد`
+            ? `${toFaDigits(n)} نفر در تیم فعال · ذخیره شد`
             : `${toFaDigits(state.people.length)} نفر وارد شد`
         );
       } catch {
@@ -1226,9 +1534,8 @@
   }
 
   function render() {
-    if (!state.selectedId && state.people.length) {
-      state.selectedId = state.people[0].id;
-    }
+    syncSelectionToActiveTeam();
+    renderTeamSwitcher();
     renderPeopleList();
     renderScheduleEditor();
     renderOverlapPicker();
@@ -1241,11 +1548,28 @@
 
   function bindEvents() {
     document.getElementById("btn-add-person").addEventListener("click", addPerson);
+    document.getElementById("btn-add-existing").addEventListener("click", openExistingModal);
     document.getElementById("btn-delete-person").addEventListener("click", deleteSelectedPerson);
     document.getElementById("btn-export").addEventListener("click", exportJson);
     document.getElementById("btn-who-now").addEventListener("click", openNowModal);
     document.getElementById("now-close").addEventListener("click", () => el.nowModal.close());
     document.getElementById("now-refresh").addEventListener("click", renderNowModal);
+    document.getElementById("btn-manage-teams").addEventListener("click", openTeamsModal);
+    document.getElementById("teams-close").addEventListener("click", () => el.teamsModal.close());
+    document.getElementById("existing-close").addEventListener("click", () => el.existingModal.close());
+    el.teamSelect.addEventListener("change", () => {
+      if (el.teamSelect.value) switchTeam(el.teamSelect.value);
+    });
+    document.getElementById("team-create-form").addEventListener("submit", (e) => {
+      e.preventDefault();
+      const team = addTeam(el.teamNewName.value);
+      if (!team) return;
+      el.teamNewName.value = "";
+      persist();
+      render();
+      renderTeamsList();
+      showToast(`تیم «${team.name}» ساخته شد`);
+    });
     el.btnFileAccess.addEventListener("click", () => grantFileAccess());
     document.getElementById("btn-import").addEventListener("click", () => el.importFile.click());
     el.importFile.addEventListener("change", () => {

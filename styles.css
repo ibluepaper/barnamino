@@ -164,6 +164,40 @@ body {
   align-items: center;
   gap: 0.5rem;
   flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.team-switcher {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.25rem 0.35rem 0.25rem 0.55rem;
+  background: rgba(255, 255, 255, 0.55);
+  border: 1px solid rgba(15, 118, 110, 0.18);
+  border-radius: 999px;
+}
+
+.team-switcher .field-label {
+  margin: 0;
+  padding-inline-start: 0.35rem;
+  font-size: 0.78rem;
+  white-space: nowrap;
+}
+
+.team-select {
+  min-width: 8.5rem;
+  max-width: 12rem;
+  border: none !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  padding: 0.35rem 0.4rem !important;
+  font-weight: 700;
+  color: var(--teal-deep);
+  cursor: pointer;
+}
+
+.team-switcher .btn {
+  border-radius: 999px;
 }
 
 .file-ok {
@@ -270,6 +304,190 @@ main {
   align-items: center;
   justify-content: space-between;
   gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.aside-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  flex-wrap: wrap;
+}
+
+.person-teams-row {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  margin: 0 0 1rem;
+  padding: 0.85rem 1rem;
+  background: rgba(15, 118, 110, 0.06);
+  border: 1px solid rgba(15, 118, 110, 0.12);
+  border-radius: 14px;
+}
+
+.person-teams {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.team-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.35rem 0.7rem;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.7);
+  font-size: 0.86rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s var(--ease), border-color 0.2s, color 0.2s;
+}
+
+.team-check input {
+  accent-color: var(--teal);
+}
+
+.team-check.on {
+  border-color: rgba(15, 118, 110, 0.35);
+  background: rgba(15, 118, 110, 0.12);
+  color: var(--teal-deep);
+}
+
+.multi-team-hint {
+  color: var(--teal);
+  font-weight: 700;
+}
+
+.modal-lead {
+  margin: 0.35rem 0 1rem;
+  color: var(--muted);
+  font-size: 0.92rem;
+}
+
+.team-create-row {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+.team-create-row .input {
+  flex: 1;
+}
+
+.teams-list {
+  list-style: none;
+  margin: 0 0 1rem;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  max-height: min(50vh, 320px);
+  overflow: auto;
+}
+
+.team-row {
+  display: grid;
+  grid-template-columns: 1fr auto auto auto;
+  gap: 0.4rem;
+  align-items: center;
+  padding: 0.55rem;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.65);
+}
+
+.team-row.active {
+  border-color: rgba(15, 118, 110, 0.35);
+  background: rgba(15, 118, 110, 0.08);
+}
+
+.team-name-input {
+  min-width: 0;
+}
+
+.team-count {
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.existing-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  max-height: min(50vh, 320px);
+  overflow: auto;
+  margin-bottom: 1rem;
+}
+
+.existing-item {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  width: 100%;
+  appearance: none;
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.7);
+  border-radius: 12px;
+  padding: 0.7rem 0.85rem;
+  font: inherit;
+  text-align: start;
+  cursor: pointer;
+  transition: background 0.2s var(--ease), border-color 0.2s, transform 0.2s var(--ease);
+}
+
+.existing-item:hover {
+  border-color: rgba(15, 118, 110, 0.35);
+  background: rgba(15, 118, 110, 0.08);
+  transform: translateY(-1px);
+}
+
+.existing-item .meta {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+  line-height: 1.35;
+}
+
+.existing-item .meta strong {
+  font-weight: 700;
+}
+
+.existing-item .meta span {
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+.existing-item .add-label {
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: var(--teal-deep);
+}
+
+@media (max-width: 720px) {
+  .team-switcher {
+    width: 100%;
+    border-radius: 14px;
+    flex-wrap: wrap;
+    padding: 0.45rem 0.55rem;
+  }
+
+  .team-select {
+    max-width: none;
+    flex: 1;
+  }
+
+  .team-row {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .team-row .team-name-input {
+    grid-column: 1 / -1;
+  }
 }
 
 .aside-head h2,

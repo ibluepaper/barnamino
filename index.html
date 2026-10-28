@@ -19,6 +19,13 @@
     </div>
 
     <div class="top-actions">
+      <div class="team-switcher" title="سوییچ بین تیم‌ها">
+        <label class="field-label" for="team-select">تیم</label>
+        <select id="team-select" class="input team-select" aria-label="تیم فعال"></select>
+        <button type="button" class="btn ghost compact" id="btn-manage-teams" title="تعریف و مدیریت تیم‌ها">
+          مدیریت تیم‌ها
+        </button>
+      </div>
       <button type="button" class="btn primary compact" id="btn-who-now" title="افرادی که همین الان مشغول کارند">
         الان کی سر کاره؟
       </button>
@@ -56,7 +63,10 @@
       <aside class="people-aside">
         <div class="aside-head">
           <h2>افراد تیم</h2>
-          <button type="button" class="btn primary compact" id="btn-add-person">+ فرد جدید</button>
+          <div class="aside-actions">
+            <button type="button" class="btn ghost compact" id="btn-add-existing" title="فردی از تیم دیگر را به این تیم اضافه کنید">+ عضو موجود</button>
+            <button type="button" class="btn primary compact" id="btn-add-person">+ فرد جدید</button>
+          </div>
         </div>
         <ul class="people-list" id="people-list"></ul>
         <p class="empty-hint" id="people-empty">هنوز کسی اضافه نشده. اولین نفر را بسازید.</p>
@@ -81,8 +91,13 @@
             <div class="editor-tools">
               <label class="field-label" for="person-color">رنگ</label>
               <input type="color" id="person-color" class="color-input" value="#0d9488" />
-              <button type="button" class="btn danger ghost compact" id="btn-delete-person">حذف</button>
+              <button type="button" class="btn danger ghost compact" id="btn-delete-person">حذف از تیم</button>
             </div>
+          </div>
+
+          <div class="person-teams-row">
+            <span class="field-label">عضویت در تیم‌ها</span>
+            <div class="person-teams" id="person-teams"></div>
           </div>
 
           <div class="week-grid" id="week-grid"></div>
@@ -187,6 +202,32 @@
       <div class="modal-actions">
         <button type="button" class="btn ghost" id="now-close">بستن</button>
         <button type="button" class="btn primary" id="now-refresh">بروزرسانی</button>
+      </div>
+    </div>
+  </dialog>
+
+  <dialog class="modal" id="teams-modal">
+    <div class="modal-card teams-card">
+      <h3>مدیریت تیم‌ها</h3>
+      <p class="lead modal-lead">تیم بسازید و بین آن‌ها سوییچ کنید. هر فرد می‌تواند عضو چند تیم باشد.</p>
+      <form id="team-create-form" class="team-create-row">
+        <input type="text" id="team-new-name" class="input" placeholder="نام تیم جدید" maxlength="40" required />
+        <button type="submit" class="btn primary compact">افزودن</button>
+      </form>
+      <ul class="teams-list" id="teams-list"></ul>
+      <div class="modal-actions">
+        <button type="button" class="btn ghost" id="teams-close">بستن</button>
+      </div>
+    </div>
+  </dialog>
+
+  <dialog class="modal" id="existing-modal">
+    <div class="modal-card">
+      <h3>افزودن عضو موجود</h3>
+      <p class="lead modal-lead">افرادی که هنوز در این تیم نیستند را انتخاب کنید.</p>
+      <div id="existing-list" class="existing-list"></div>
+      <div class="modal-actions">
+        <button type="button" class="btn ghost" id="existing-close">بستن</button>
       </div>
     </div>
   </dialog>
