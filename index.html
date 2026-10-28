@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>برنامینو — هماهنگی برنامه تیم</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="bg-layer" aria-hidden="true"></div>
+
+  <header class="topbar">
+    <div class="brand">
+      <span class="brand-mark" aria-hidden="true"></span>
+      <div class="brand-text">
+        <h1>برنامینو</h1>
+        <p>هماهنگی حضور و دورکاری تیم</p>
+      </div>
+    </div>
+
+    <div class="top-actions">
+      <button type="button" class="btn primary compact" id="btn-who-now" title="افرادی که همین الان مشغول کارند">
+        الان کی سر کاره؟
+      </button>
+      <button type="button" class="btn ghost compact" id="btn-file-access" title="پوشهٔ همین پروژه را انتخاب کنید تا data.json کنار index.html استفاده شود">
+        اجازه ذخیره در فایل
+      </button>
+      <span class="file-ok hidden" id="file-ok" title="نوشتن روی data.json فعال است">ذخیره روی فایل فعال</span>
+      <button type="button" class="btn ghost" id="btn-import" title="وارد کردن فایل JSON">
+        وارد کردن
+      </button>
+      <button type="button" class="btn ghost" id="btn-export" title="خروجی گرفتن به JSON">
+        خروجی
+      </button>
+      <input type="file" id="import-file" accept="application/json,.json" hidden />
+    </div>
+  </header>
+
+  <nav class="tabs" role="tablist">
+    <button type="button" class="tab active" role="tab" aria-selected="true" data-tab="people">
+      افراد و برنامه
+    </button>
+    <button type="button" class="tab" role="tab" aria-selected="false" data-tab="board">
+      برنامه جامع
+    </button>
+    <button type="button" class="tab" role="tab" aria-selected="false" data-tab="overlap">
+      بازه‌های مشترک
+    </button>
+  </nav>
+
+  <main>
+    <section id="panel-people" class="panel active" role="tabpanel">
+      <aside class="people-aside">
+        <div class="aside-head">
+          <h2>افراد تیم</h2>
+          <button type="button" class="btn primary compact" id="btn-add-person">+ فرد جدید</button>
+        </div>
+        <ul class="people-list" id="people-list"></ul>
+        <p class="empty-hint" id="people-empty">هنوز کسی اضافه نشده. اولین نفر را بسازید.</p>
+      </aside>
+
+      <div class="schedule-pane" id="schedule-pane">
+        <div class="empty-state" id="schedule-empty">
+          <div class="empty-visual" aria-hidden="true"></div>
+          <h2>برنامه هفتگی</h2>
+          <p>یک نفر را از فهرست انتخاب کنید تا بازه‌های کاری‌اش را تنظیم کنید.</p>
+        </div>
+
+        <div class="schedule-editor hidden" id="schedule-editor">
+          <div class="editor-head">
+            <div class="person-meta">
+              <span class="person-swatch" id="editor-swatch"></span>
+              <div>
+                <label class="field-label" for="person-name">نام</label>
+                <input type="text" id="person-name" class="input name-input" placeholder="مثلاً سارا" maxlength="40" />
+              </div>
+            </div>
+            <div class="editor-tools">
+              <label class="field-label" for="person-color">رنگ</label>
+              <input type="color" id="person-color" class="color-input" value="#0d9488" />
+              <button type="button" class="btn danger ghost compact" id="btn-delete-person">حذف</button>
+            </div>
+          </div>
+
+          <div class="week-grid" id="week-grid"></div>
+        </div>
+      </div>
+    </section>
+
+    <section id="panel-board" class="panel" role="tabpanel" hidden>
+      <div class="board-shell">
+        <div class="board-head">
+          <div>
+            <h2>برنامه جامع تیم</h2>
+            <p class="lead">نمای یکپارچهٔ بازه‌های همهٔ اعضا در طول هفته</p>
+          </div>
+          <div class="chip-group" id="board-day-filters" role="group" aria-label="فیلتر روز"></div>
+        </div>
+        <div class="board-legend">
+          <span class="legend office">حضوری</span>
+          <span class="legend remote">دورکاری</span>
+          <span class="legend now-mark">الان</span>
+        </div>
+        <div id="team-board" class="team-board"></div>
+      </div>
+    </section>
+
+    <section id="panel-overlap" class="panel" role="tabpanel" hidden>
+      <div class="overlap-setup">
+        <h2>یافتن بازه مشترک</h2>
+        <p class="lead">افراد موردنظر را انتخاب کنید تا تقاطع برنامه هفتگی‌شان نمایش داده شود.</p>
+
+        <div class="overlap-people" id="overlap-people"></div>
+
+        <div class="filter-row">
+          <span class="field-label">نوع حضور</span>
+          <div class="chip-group" role="group" aria-label="فیلتر نوع حضور">
+            <button type="button" class="chip active" data-mode="any">هر نوع</button>
+            <button type="button" class="chip" data-mode="office">فقط حضوری</button>
+            <button type="button" class="chip" data-mode="remote">فقط دورکاری</button>
+            <button type="button" class="chip" data-mode="same">هم‌نوع</button>
+          </div>
+          <p class="filter-hint" id="filter-hint">بازه‌هایی که همه در آن مشغول‌اند، صرف‌نظر از حضوری یا دورکاری.</p>
+        </div>
+      </div>
+
+      <div class="overlap-results" id="overlap-results">
+        <div class="empty-state compact">
+          <h3>نتیجه‌ای نیست</h3>
+          <p>حداقل دو نفر را انتخاب کنید.</p>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+  <dialog class="modal" id="now-modal">
+    <div class="modal-card now-card">
+      <div class="now-head">
+        <h3>الان کی سر کاره؟</h3>
+        <p class="now-clock" id="now-clock"></p>
+      </div>
+      <div id="now-list" class="now-list"></div>
+      <div class="modal-actions">
+        <button type="button" class="btn ghost" id="now-close">بستن</button>
+        <button type="button" class="btn primary" id="now-refresh">بروزرسانی</button>
+      </div>
+    </div>
+  </dialog>
+
+  <dialog class="modal" id="slot-modal">
+    <form method="dialog" id="slot-form" class="modal-card">
+      <h3 id="slot-modal-title">بازه زمانی</h3>
+      <div class="modal-fields">
+        <label>
+          از ساعت
+          <input type="time" id="slot-start" required value="09:00" />
+        </label>
+        <label>
+          تا ساعت
+          <input type="time" id="slot-end" required value="17:00" />
+        </label>
+        <fieldset class="type-fieldset">
+          <legend>نوع</legend>
+          <label class="radio">
+            <input type="radio" name="slot-type" value="office" checked />
+            <span>حضوری</span>
+          </label>
+          <label class="radio">
+            <input type="radio" name="slot-type" value="remote" />
+            <span>دورکاری</span>
+          </label>
+        </fieldset>
+      </div>
+      <p class="form-error hidden" id="slot-error"></p>
+      <div class="modal-actions">
+        <button type="button" class="btn ghost" id="slot-cancel">انصراف</button>
+        <button type="submit" class="btn primary" id="slot-save">ذخیره</button>
+      </div>
+    </form>
+  </dialog>
+
+  <script src="app.js"></script>
+</body>
+</html>
