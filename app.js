@@ -19,10 +19,28 @@
   ];
 
   const FILTER_HINTS = {
-    any: "بازه‌هایی که همه در آن مشغول‌اند، صرف‌نظر از حضوری یا دورکاری.",
-    office: "فقط بازه‌هایی که همه حضوری هستند.",
-    remote: "فقط بازه‌هایی که همه دورکاری هستند.",
-    same: "بازه‌هایی که همه هم‌زمان و با یک نوع حضور مشترک کار می‌کنند.",
+    full: {
+      any: "بازه‌هایی که همه در آن مشغول‌اند، صرف‌نظر از حضوری یا دورکاری.",
+      office: "فقط بازه‌هایی که همه حضوری هستند.",
+      remote: "فقط بازه‌هایی که همه دورکاری هستند.",
+      same: "بازه‌هایی که همه هم‌زمان و با یک نوع حضور مشترک کار می‌کنند.",
+    },
+    max: {
+      any: "تراکم هم‌پوشانی را بدون توجه به حضوری یا دورکاری حساب می‌کند.",
+      office: "فقط حضور حضوری افراد در تراکم شمرده می‌شود.",
+      remote: "فقط حضور دورکاری افراد در تراکم شمرده می‌شود.",
+      same: "تراکم حضوری و دورکاری جداگانه محاسبه می‌شود.",
+    },
+  };
+
+  const OVERLAP_VIEW_HINTS = {
+    full: "فقط بازه‌هایی که همهٔ افراد انتخاب‌شده هم‌زمان مشغول‌اند.",
+    max: "برای هر روز پرتراکم‌ترین بازه‌ها را نشان می‌دهد؛ مثلاً چند نفر و چند دقیقه با هم هستند.",
+  };
+
+  const OVERLAP_LEAD = {
+    full: "افراد موردنظر را انتخاب کنید تا تقاطع برنامه هفتگی‌شان نمایش داده شود.",
+    max: "افراد را انتخاب کنید تا بیشینهٔ هم‌پوشانی هر روز (چند نفر، چند دقیقه) مشخص شود.",
   };
 
   const COLORS = [
@@ -42,6 +60,7 @@
     selectedId: null,
     overlapIds: new Set(),
     overlapMode: "any",
+    overlapView: "full", // "full" | "max"
     editingSlot: null, // { personId, day, index } or null for new
     fileHandle: null,
     boardDayFilter: "all",
@@ -64,6 +83,8 @@
     teamCapacity: document.getElementById("team-capacity"),
     overlapPeople: document.getElementById("overlap-people"),
     overlapResults: document.getElementById("overlap-results"),
+    overlapLead: document.getElementById("overlap-lead"),
+    overlapViewHint: document.getElementById("overlap-view-hint"),
     filterHint: document.getElementById("filter-hint"),
     toast: document.getElementById("toast"),
     slotModal: document.getElementById("slot-modal"),
@@ -876,6 +897,114 @@
     return { selected, byDay, total };
   }
 
+  function mergeConcurrencySegments(segments) {
+    if (!segments.length) return [];
+    const sorted = [...segments].sort((a, b) => a.start - b.start || b.count - a.count);
+    const out = [{ ...sorted[0], ids: [...sorted[0].ids] }];
+    for (let i = 1; i < sorted.length; i++) {
+      const last = out[out.length - 1];
+      const cur = sorted[i];
+      const sameIds =
+        last.ids.length === cur.ids.length &&
+        last.ids.every((id) => cur.ids.includes(id));
+      if (cur.start <= last.end && cur.count === last.count && cur.kind === last.kind && sameIds) {
+        last.end = Math.max(last.end, cur.end);
+      } else {
+        out.push({ ...cur, ids: [...cur.ids] });
+      }
+    }
+    return out;
+  }
+
+  function computeConcurrencySegments(people, dayKey, typeFilter) {
+    const events = [];
+    for (const person of people) {
+      for (const slot of person.schedule[dayKey] || []) {
+        if (typeFilter && slot.type !== typeFilter) continue;
+        const start = toMinutes(slot.start);
+        const end = toMinutes(slot.end);
+        if (end <= start) continue;
+        events.push({ t: start, d: 1, id: person.id });
+        events.push({ t: end, d: -1, id: person.id });
+      }
+    }
+    events.sort((a, b) => a.t - b.t || a.d - b.d);
+
+    const active = new Map();
+    const segments = [];
+    let prevT = null;
+    let i = 0;
+
+    while (i < events.length) {
+      const t = events[i].t;
+      if (prevT !== null && t > prevT) {
+        const ids = [...active.keys()];
+        if (ids.length >= 2) {
+          segments.push({
+            start: prevT,
+            end: t,
+            count: ids.length,
+            ids,
+            kind: typeFilter || "any",
+          });
+        }
+      }
+      while (i < events.length && events[i].t === t) {
+        const e = events[i++];
+        const next = (active.get(e.id) || 0) + e.d;
+        if (next <= 0) active.delete(e.id);
+        else active.set(e.id, next);
+      }
+      prevT = t;
+    }
+
+    return mergeConcurrencySegments(segments);
+  }
+
+  function concurrencyLabel(kind, count, total) {
+    if (count === total) {
+      if (kind === "office") return "همه حضوری";
+      if (kind === "remote") return "همه دورکاری";
+      return "همه هستند";
+    }
+    if (kind === "office") return `${toFaDigits(count)} نفر حضوری`;
+    if (kind === "remote") return `${toFaDigits(count)} نفر دورکاری`;
+    return `${toFaDigits(count)} نفر`;
+  }
+
+  function computeMaxOverlaps() {
+    const selected = activePeople().filter((p) => state.overlapIds.has(p.id));
+    if (selected.length < 2) return null;
+
+    const byDay = {};
+    let total = 0;
+    let weekMax = 0;
+
+    for (const day of DAYS) {
+      let segments;
+      if (state.overlapMode === "same") {
+        segments = [
+          ...computeConcurrencySegments(selected, day.key, "office"),
+          ...computeConcurrencySegments(selected, day.key, "remote"),
+        ];
+      } else if (state.overlapMode === "office") {
+        segments = computeConcurrencySegments(selected, day.key, "office");
+      } else if (state.overlapMode === "remote") {
+        segments = computeConcurrencySegments(selected, day.key, "remote");
+      } else {
+        segments = computeConcurrencySegments(selected, day.key, null);
+      }
+
+      segments.sort((a, b) => b.count - a.count || b.end - b.start - (a.end - a.start) || a.start - b.start);
+      const dayMax = segments.reduce((m, s) => Math.max(m, s.count), 0);
+      byDay[day.key] = { segments, maxCount: dayMax };
+      total += segments.length;
+      weekMax = Math.max(weekMax, dayMax);
+    }
+
+    return { selected, byDay, total, weekMax };
+  }
+
   function renderTeamCapacity() {
     if (!el.teamCapacity) return;
     const teamId = state.activeTeamId;
@@ -1457,7 +1586,95 @@
     el.lookupResults.innerHTML = html;
   }
 
+  function personChipsHtml(ids, peopleById) {
+    return [...ids]
+      .sort((a, b) => {
+        const pa = peopleById.get(a);
+        const pb = peopleById.get(b);
+        return (pa?.name || "").localeCompare(pb?.name || "", "fa");
+      })
+      .map((id) => {
+        const person = peopleById.get(id);
+        if (!person) return "";
+        return `<span class="overlap-name-chip"><span class="dot" style="background:${person.color}"></span>${escapeHtml(person.name)}</span>`;
+      })
+      .join("");
+  }
+
+  function renderMaxOverlapResults(result) {
+    const names = result.selected.map((p) => p.name).join("، ");
+    const peopleById = new Map(result.selected.map((p) => [p.id, p]));
+    const totalSelected = result.selected.length;
+
+    let html = `
+      <div class="summary-bar">
+        <span>${toFaDigits(totalSelected)} نفر: ${escapeHtml(names)}</span>
+        <span>بیشینه هفته: ${toFaDigits(result.weekMax)} نفر هم‌زمان</span>
+      </div>
+    `;
+
+    if (result.total === 0) {
+      html += `
+        <div class="empty-state compact">
+          <h3>هم‌پوشانی‌ای پیدا نشد</h3>
+          <p>حداقل دو نفر در هیچ بازه‌ای با هم تلاقی ندارند یا فیلتر نوع حضور مانع شده است.</p>
+        </div>
+      `;
+      el.overlapResults.innerHTML = html;
+      return;
+    }
+
+    for (const day of DAYS) {
+      const dayData = result.byDay[day.key];
+      const segments = dayData.segments;
+      html += `<article class="day-result"><h3>${day.label}</h3>`;
+
+      if (!segments.length) {
+        html += `<p class="no-overlap-day">بدون هم‌پوشانی</p>`;
+      } else {
+        const peak = segments.filter((s) => s.count === dayData.maxCount);
+        const peakDur = peak.reduce((m, s) => Math.max(m, s.end - s.start), 0);
+        const everyone = dayData.maxCount === totalSelected;
+        html += `<p class="day-peak">بیشینه: <strong>${toFaDigits(dayData.maxCount)} نفر</strong>`;
+        if (everyone) html += ` · همه هستند`;
+        html += ` · ${formatHoursTotal(peakDur)}</p>`;
+        html += `<div class="result-slots">`;
+        for (const seg of segments) {
+          const isPeak = seg.count === dayData.maxCount;
+          const kindClass = seg.kind === "any" ? "mixed" : seg.kind;
+          const duration = formatHoursTotal(seg.end - seg.start);
+          html += `
+            <div class="result-slot max-slot ${kindClass}${isPeak ? " peak" : ""}">
+              <span class="time">${formatRange(fromMinutes(seg.start), fromMinutes(seg.end))}</span>
+              <span class="kind">${concurrencyLabel(seg.kind, seg.count, totalSelected)} · ${duration}</span>
+              <div class="overlap-names">${personChipsHtml(seg.ids, peopleById)}</div>
+            </div>
+          `;
+        }
+        html += `</div>`;
+      }
+      html += `</article>`;
+    }
+
+    el.overlapResults.innerHTML = html;
+  }
+
   function renderOverlapResults() {
+    if (state.overlapView === "max") {
+      const maxResult = computeMaxOverlaps();
+      if (!maxResult) {
+        el.overlapResults.innerHTML = `
+          <div class="empty-state compact">
+            <h3>نتیجه‌ای نیست</h3>
+            <p>حداقل دو نفر را انتخاب کنید.</p>
+          </div>
+        `;
+        return;
+      }
+      renderMaxOverlapResults(maxResult);
+      return;
+    }
+
     const result = computeOverlaps();
     if (!result) {
       el.overlapResults.innerHTML = `
@@ -1510,6 +1727,14 @@
     }
 
     el.overlapResults.innerHTML = html;
+  }
+
+  function syncOverlapViewUi() {
+    if (el.overlapLead) el.overlapLead.textContent = OVERLAP_LEAD[state.overlapView];
+    if (el.overlapViewHint) el.overlapViewHint.textContent = OVERLAP_VIEW_HINTS[state.overlapView];
+    if (el.filterHint) {
+      el.filterHint.textContent = FILTER_HINTS[state.overlapView][state.overlapMode];
+    }
   }
 
   function escapeHtml(str) {
@@ -1893,12 +2118,22 @@
       btn.addEventListener("click", () => switchTab(btn.dataset.tab));
     });
 
-    document.querySelectorAll("#panel-overlap .chip").forEach((chip) => {
+    document.querySelectorAll("#overlap-view .chip").forEach((chip) => {
       chip.addEventListener("click", () => {
-        document.querySelectorAll("#panel-overlap .chip").forEach((c) => c.classList.remove("active"));
+        document.querySelectorAll("#overlap-view .chip").forEach((c) => c.classList.remove("active"));
+        chip.classList.add("active");
+        state.overlapView = chip.dataset.view;
+        syncOverlapViewUi();
+        renderOverlapResults();
+      });
+    });
+
+    document.querySelectorAll("#overlap-mode .chip").forEach((chip) => {
+      chip.addEventListener("click", () => {
+        document.querySelectorAll("#overlap-mode .chip").forEach((c) => c.classList.remove("active"));
         chip.classList.add("active");
         state.overlapMode = chip.dataset.mode;
-        el.filterHint.textContent = FILTER_HINTS[state.overlapMode];
+        syncOverlapViewUi();
         renderOverlapResults();
       });
     });

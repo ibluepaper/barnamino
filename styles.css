@@ -1531,6 +1531,54 @@ main {
   font-size: 0.9rem;
 }
 
+.day-peak {
+  margin: 0 0 0.65rem;
+  font-size: 0.88rem;
+  color: var(--ink-soft);
+}
+
+.day-peak strong {
+  color: var(--teal-deep);
+}
+
+.result-slot.max-slot {
+  gap: 0.3rem;
+  max-width: 100%;
+}
+
+.result-slot.peak {
+  background: linear-gradient(135deg, rgba(15, 118, 110, 0.2), rgba(20, 184, 166, 0.12));
+  border-color: rgba(15, 118, 110, 0.4);
+  box-shadow: 0 0 0 1px rgba(15, 118, 110, 0.12);
+}
+
+.overlap-names {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  margin-top: 0.15rem;
+}
+
+.overlap-name-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.15rem 0.45rem;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.85);
+  border: 1px solid var(--line);
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--ink-soft);
+}
+
+.overlap-name-chip .dot {
+  width: 0.45rem;
+  height: 0.45rem;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
 .summary-bar {
   display: flex;
   flex-wrap: wrap;

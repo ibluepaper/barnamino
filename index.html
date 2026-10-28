@@ -134,13 +134,22 @@
     <section id="panel-overlap" class="panel" role="tabpanel" hidden>
       <div class="overlap-setup">
         <h2>یافتن بازه مشترک</h2>
-        <p class="lead">افراد موردنظر را انتخاب کنید تا تقاطع برنامه هفتگی‌شان نمایش داده شود.</p>
+        <p class="lead" id="overlap-lead">افراد موردنظر را انتخاب کنید تا تقاطع برنامه هفتگی‌شان نمایش داده شود.</p>
+
+        <div class="filter-row">
+          <span class="field-label">حالت نمایش</span>
+          <div class="chip-group" id="overlap-view" role="group" aria-label="حالت نمایش هم‌پوشانی">
+            <button type="button" class="chip active" data-view="full">اشتراک کامل</button>
+            <button type="button" class="chip" data-view="max">بیشینه هم‌پوشانی</button>
+          </div>
+          <p class="filter-hint" id="overlap-view-hint">فقط بازه‌هایی که همهٔ افراد انتخاب‌شده هم‌زمان مشغول‌اند.</p>
+        </div>
 
         <div class="overlap-people" id="overlap-people"></div>
 
         <div class="filter-row">
           <span class="field-label">نوع حضور</span>
-          <div class="chip-group" role="group" aria-label="فیلتر نوع حضور">
+          <div class="chip-group" id="overlap-mode" role="group" aria-label="فیلتر نوع حضور">
             <button type="button" class="chip active" data-mode="any">هر نوع</button>
             <button type="button" class="chip" data-mode="office">فقط حضوری</button>
             <button type="button" class="chip" data-mode="remote">فقط دورکاری</button>

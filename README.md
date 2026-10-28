@@ -11,6 +11,7 @@ Plain HTML, CSS, and JavaScript. Open `index.html` in a browser.
 - Weekly schedule (Saturday–Friday) with multiple time ranges per day
 - Mark each range as **on-site** (`office`) or **remote**
 - Find **shared time ranges** across selected people (with presence-type filters)
+- **Max daily overlap**: see the densest windows per day (e.g. 5 people for 30 minutes, or everyone together)
 - **Lookup by time**: pick a clock time and one or more days to see who’s scheduled then
 - **Team board**: a single timeline view of everyone on the active team
 - **Who’s working now?**: people currently on the clock (active team), and until when
@@ -82,7 +83,7 @@ Older `version: 1` files (no `teams`) are migrated automatically into a default 
 | Team switcher | Pick the active team; open **Manage teams** to create / rename / delete |
 | People & schedule | Members of the active team; edit schedule and multi-team membership |
 | Team board | Timeline overview for the active team |
-| Shared ranges | Select people on the active team and compute overlapping times |
+| Shared ranges | Select people and compute full intersection, or max concurrency per day |
 | Lookup by time | Pick a time + days; list who’s available then (active team) |
 | Who’s working now? | People currently working right now (active team) |
 
