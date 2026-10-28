@@ -76,8 +76,9 @@ Without file permission, data is still kept in the browser’s `localStorage`. A
 ```
 barnamino/
 ├── index.html    # App shell
-├── styles.css    # Persian RTL styles
+├── styles.css    # Persian RTL styles (+ local fonts)
 ├── app.js        # App logic
+├── fonts/        # Vazirmatn (offline, no CDN)
 ├── data.json     # Team data
 └── README.md
 ```

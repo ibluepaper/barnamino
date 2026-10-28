@@ -84,6 +84,10 @@
     return Object.fromEntries(DAYS.map((d) => [d.key, []]));
   }
 
+  function toFaDigits(value) {
+    return String(value).replace(/\d/g, (d) => "۰۱۲۳۴۵۶۷۸۹"[d]);
+  }
+
   function toMinutes(time) {
     const [h, m] = time.split(":").map(Number);
     return h * 60 + m;
@@ -92,11 +96,11 @@
   function fromMinutes(mins) {
     const h = Math.floor(mins / 60);
     const m = mins % 60;
-    return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
+    return toFaDigits(`${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`);
   }
 
   function formatRange(start, end) {
-    return `${start} تا ${end}`;
+    return `${toFaDigits(start)} تا ${toFaDigits(end)}`;
   }
 
   function typeLabel(type) {
@@ -149,12 +153,12 @@
 
   function formatRemaining(mins) {
     if (mins < 60) {
-      return `<bdi>${mins}</bdi> دقیقه دیگر`;
+      return `<bdi>${toFaDigits(mins)}</bdi> دقیقه دیگر`;
     }
     const h = Math.floor(mins / 60);
     const m = mins % 60;
-    if (!m) return `<bdi>${h}</bdi> ساعت دیگر`;
-    return `<bdi>${h}</bdi> ساعت و <bdi>${m}</bdi> دقیقه دیگر`;
+    if (!m) return `<bdi>${toFaDigits(h)}</bdi> ساعت دیگر`;
+    return `<bdi>${toFaDigits(h)}</bdi> ساعت و <bdi>${toFaDigits(m)}</bdi> دقیقه دیگر`;
   }
 
   function buildPayload() {
@@ -460,7 +464,7 @@
     const color = COLORS[state.people.length % COLORS.length];
     const person = {
       id: uid(),
-      name: `فرد ${state.people.length + 1}`,
+      name: `فرد ${toFaDigits(state.people.length + 1)}`,
       color,
       schedule: emptySchedule(),
     };
@@ -671,7 +675,7 @@
         <span class="dot" style="background:${person.color}"></span>
         <span class="meta">
           <strong>${escapeHtml(person.name)}</strong>
-          <span>${countSlots(person)} بازه در هفته</span>
+          <span>${toFaDigits(countSlots(person))} بازه در هفته</span>
         </span>
       `;
       btn.addEventListener("click", () => {
@@ -849,8 +853,8 @@
 
       html += `<div class="board-axis" aria-hidden="true">`;
       for (const h of hourMarks) {
-        const left = ((h * 60 - BOARD_START) / BOARD_SPAN) * 100;
-        html += `<span style="left:${left}%">${String(h).padStart(2, "0")}</span>`;
+        const right = ((h * 60 - BOARD_START) / BOARD_SPAN) * 100;
+        html += `<span style="right:${right}%">${toFaDigits(String(h).padStart(2, "0"))}</span>`;
       }
       html += `</div>`;
 
@@ -868,13 +872,13 @@
           const start = Math.max(toMinutes(slot.start), BOARD_START);
           const end = Math.min(toMinutes(slot.end), BOARD_END);
           if (end <= start) continue;
-          const left = ((start - BOARD_START) / BOARD_SPAN) * 100;
+          const right = ((start - BOARD_START) / BOARD_SPAN) * 100;
           const width = ((end - start) / BOARD_SPAN) * 100;
-          html += `<div class="board-bar ${slot.type}" style="left:${left}%;width:${width}%" title="${formatRange(slot.start, slot.end)} — ${typeLabel(slot.type)}">${slot.start}–${slot.end}</div>`;
+          html += `<div class="board-bar ${slot.type}" style="right:${right}%;width:${width}%" title="${formatRange(slot.start, slot.end)} — ${typeLabel(slot.type)}">${toFaDigits(slot.start)}–${toFaDigits(slot.end)}</div>`;
         }
         if (isToday && mins >= BOARD_START && mins <= BOARD_END) {
-          const left = ((mins - BOARD_START) / BOARD_SPAN) * 100;
-          html += `<div class="board-now-line" style="left:${left}%" title="الان"></div>`;
+          const right = ((mins - BOARD_START) / BOARD_SPAN) * 100;
+          html += `<div class="board-now-line" style="right:${right}%" title="الان"></div>`;
         }
         html += `</div></div>`;
       }
@@ -906,10 +910,10 @@
         <span class="dot" style="background:${item.person.color}"></span>
         <div class="meta">
           <strong title="${escapeHtml(item.person.name)}">${escapeHtml(item.person.name)}</strong>
-          <span>${typeLabel(item.slot.type)} · از <bdi>${item.slot.start}</bdi></span>
+          <span>${typeLabel(item.slot.type)} · از <bdi>${toFaDigits(item.slot.start)}</bdi></span>
         </div>
         <div class="until">
-          <span class="until-time">تا ${item.until}</span>
+          <span class="until-time">تا ${toFaDigits(item.until)}</span>
           <span class="until-left">${formatRemaining(item.remaining)}</span>
         </div>
       </div>
@@ -938,8 +942,8 @@
     const names = result.selected.map((p) => p.name).join("، ");
     let html = `
       <div class="summary-bar">
-        <span>${result.selected.length} نفر: ${escapeHtml(names)}</span>
-        <span>${result.total} بازه مشترک در هفته</span>
+        <span>${toFaDigits(result.selected.length)} نفر: ${escapeHtml(names)}</span>
+        <span>${toFaDigits(result.total)} بازه مشترک در هفته</span>
       </div>
     `;
 
@@ -1016,8 +1020,8 @@
         render();
         showToast(
           state.fileHandle
-            ? `${state.people.length} نفر وارد و در data.json ذخیره شد`
-            : `${state.people.length} نفر وارد شد`
+            ? `${toFaDigits(state.people.length)} نفر وارد و در data.json ذخیره شد`
+            : `${toFaDigits(state.people.length)} نفر وارد شد`
         );
       } catch {
         showToast("فایل JSON معتبر نیست");
