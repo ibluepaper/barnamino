@@ -17,6 +17,7 @@
     { key: "thu", label: "پنجشنبه" },
     { key: "fri", label: "جمعه" },
   ];
+  const MEETING_DAYS = DAYS.filter((d) => d.key !== "fri");
 
   const FILTER_HINTS = {
     full: {
@@ -110,6 +111,8 @@
     teamNewName: document.getElementById("team-new-name"),
     existingModal: document.getElementById("existing-modal"),
     existingList: document.getElementById("existing-list"),
+    meetingsGrid: document.getElementById("meetings-grid"),
+    meetingsLead: document.getElementById("meetings-lead"),
   };
 
   function uid() {
@@ -122,8 +125,143 @@
     return Object.fromEntries(DAYS.map((d) => [d.key, []]));
   }
 
+  function emptyMeetingDay() {
+    return { time: "", note: "", verbalIds: [], writtenIds: [] };
+  }
+
+  function emptyDailyMeetings() {
+    return Object.fromEntries(MEETING_DAYS.map((d) => [d.key, emptyMeetingDay()]));
+  }
+
+  function normalizeIdList(ids) {
+    if (!Array.isArray(ids)) return [];
+    const out = [];
+    const seen = new Set();
+    for (const id of ids) {
+      if (typeof id !== "string" || !id || seen.has(id)) continue;
+      seen.add(id);
+      out.push(id);
+    }
+    return out;
+  }
+
+  function normalizeMeetingDay(day) {
+    return {
+      time: typeof day?.time === "string" ? day.time : "",
+      note: typeof day?.note === "string" ? day.note : "",
+      verbalIds: normalizeIdList(day?.verbalIds),
+      writtenIds: normalizeIdList(day?.writtenIds),
+    };
+  }
+
+  function resolveMeetingPeople(ids) {
+    const byId = new Map(activePeople().map((p) => [p.id, p]));
+    return normalizeIdList(ids)
+      .map((id) => byId.get(id))
+      .filter(Boolean);
+  }
+
+  function pruneMeetingIds(entry) {
+    const valid = new Set(activePeople().map((p) => p.id));
+    entry.verbalIds = normalizeIdList(entry.verbalIds).filter((id) => valid.has(id));
+    entry.writtenIds = normalizeIdList(entry.writtenIds).filter((id) => valid.has(id));
+    return entry;
+  }
+
+  function normalizeDailyMeetings(raw) {
+    const base = emptyDailyMeetings();
+    if (!raw || typeof raw !== "object") return base;
+    for (const d of MEETING_DAYS) {
+      base[d.key] = normalizeMeetingDay(raw[d.key]);
+    }
+    return base;
+  }
+
   function toFaDigits(value) {
     return String(value).replace(/\d/g, (d) => "۰۱۲۳۴۵۶۷۸۹"[d]);
+  }
+
+  function parseTimeValue(time) {
+    if (typeof time !== "string" || !/^\d{1,2}:\d{2}$/.test(time)) return null;
+    const [h, m] = time.split(":").map(Number);
+    if (!Number.isFinite(h) || !Number.isFinite(m) || h < 0 || h > 23 || m < 0 || m > 59) {
+      return null;
+    }
+    return { h, m };
+  }
+
+  function formatTimeValue(h, m) {
+    return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
+  }
+
+  function buildTimeSelectOptions(kind, selected, allowEmpty) {
+    const max = kind === "hour" ? 24 : 60;
+    const selectedStr = selected == null || selected === "" ? "" : String(Number(selected));
+    let html = allowEmpty
+      ? `<option value=""${selectedStr === "" ? " selected" : ""}>—</option>`
+      : "";
+    for (let i = 0; i < max; i++) {
+      const value = String(i);
+      const label = toFaDigits(String(i).padStart(2, "0"));
+      html += `<option value="${value}"${selectedStr === value ? " selected" : ""}>${label}</option>`;
+    }
+    return html;
+  }
+
+  function timePickerInnerHtml(value = "", allowEmpty = false) {
+    const parsed = parseTimeValue(value);
+    const hour = parsed ? parsed.h : allowEmpty ? "" : 0;
+    const minute = parsed ? parsed.m : allowEmpty ? "" : 0;
+    return `
+      <select class="time-hour" aria-label="ساعت">${buildTimeSelectOptions("hour", hour, allowEmpty)}</select>
+      <span class="time-sep" aria-hidden="true">:</span>
+      <select class="time-minute" aria-label="دقیقه">${buildTimeSelectOptions("minute", minute, allowEmpty)}</select>
+    `;
+  }
+
+  function getTimePickerValue(root) {
+    if (!root) return "";
+    const hour = root.querySelector(".time-hour")?.value;
+    const minute = root.querySelector(".time-minute")?.value;
+    if (hour === "" || minute === "" || hour == null || minute == null) return "";
+    return formatTimeValue(Number(hour), Number(minute));
+  }
+
+  function setTimePickerValue(root, time, allowEmpty = false) {
+    if (!root) return;
+    const hour = root.querySelector(".time-hour");
+    const minute = root.querySelector(".time-minute");
+    if (!hour || !minute) return;
+    const parsed = parseTimeValue(time);
+    if (!parsed) {
+      if (allowEmpty) {
+        hour.value = "";
+        minute.value = "";
+      }
+      return;
+    }
+    hour.value = String(parsed.h);
+    minute.value = String(parsed.m);
+  }
+
+  function mountTimePicker(root, { value = "", allowEmpty = false, onChange } = {}) {
+    if (!root) return;
+    root.classList.add("time-picker");
+    root.innerHTML = timePickerInnerHtml(value, allowEmpty);
+    const hour = root.querySelector(".time-hour");
+    const minute = root.querySelector(".time-minute");
+    const sync = (source) => {
+      if (allowEmpty && source.value === "") {
+        hour.value = "";
+        minute.value = "";
+      } else if (allowEmpty) {
+        if (hour.value === "") hour.value = "0";
+        if (minute.value === "") minute.value = "0";
+      }
+      onChange?.(getTimePickerValue(root));
+    };
+    hour.addEventListener("change", () => sync(hour));
+    minute.addEventListener("change", () => sync(minute));
   }
 
   function toMinutes(time) {
@@ -203,11 +341,12 @@
     return {
       id: t?.id || uid(),
       name: (t?.name || "تیم بدون نام").trim() || "تیم بدون نام",
+      dailyMeetings: normalizeDailyMeetings(t?.dailyMeetings),
     };
   }
 
   function createDefaultTeam() {
-    return { id: uid(), name: "تیم اصلی" };
+    return { id: uid(), name: "تیم اصلی", dailyMeetings: emptyDailyMeetings() };
   }
 
   function getActiveTeam() {
@@ -673,10 +812,51 @@
   function addTeam(name) {
     const trimmed = (name || "").trim();
     if (!trimmed) return null;
-    const team = { id: uid(), name: trimmed };
+    const team = { id: uid(), name: trimmed, dailyMeetings: emptyDailyMeetings() };
     state.teams.push(team);
     if (!state.activeTeamId) state.activeTeamId = team.id;
     return team;
+  }
+
+  function ensureTeamMeetings(team) {
+    if (!team) return null;
+    if (!team.dailyMeetings) team.dailyMeetings = emptyDailyMeetings();
+    return team.dailyMeetings;
+  }
+
+  function updateMeetingField(dayKey, field, value) {
+    const team = getActiveTeam();
+    if (!team || !MEETING_DAYS.some((d) => d.key === dayKey)) return;
+    const meetings = ensureTeamMeetings(team);
+    if (!meetings[dayKey]) meetings[dayKey] = emptyMeetingDay();
+    meetings[dayKey][field] = value;
+    persist();
+  }
+
+  function addMeetingPerson(dayKey, group, personId) {
+    const team = getActiveTeam();
+    if (!team || !MEETING_DAYS.some((d) => d.key === dayKey) || !personId) return;
+    if (group !== "verbalIds" && group !== "writtenIds") return;
+    const meetings = ensureTeamMeetings(team);
+    if (!meetings[dayKey]) meetings[dayKey] = emptyMeetingDay();
+    const entry = pruneMeetingIds(meetings[dayKey]);
+    const other = group === "verbalIds" ? "writtenIds" : "verbalIds";
+    if (!entry[group].includes(personId)) entry[group].push(personId);
+    entry[other] = entry[other].filter((id) => id !== personId);
+    persist();
+    renderMeetingsGrid();
+  }
+
+  function removeMeetingPerson(dayKey, group, personId) {
+    const team = getActiveTeam();
+    if (!team || !MEETING_DAYS.some((d) => d.key === dayKey) || !personId) return;
+    if (group !== "verbalIds" && group !== "writtenIds") return;
+    const meetings = ensureTeamMeetings(team);
+    if (!meetings[dayKey]) meetings[dayKey] = emptyMeetingDay();
+    const entry = pruneMeetingIds(meetings[dayKey]);
+    entry[group] = entry[group].filter((id) => id !== personId);
+    persist();
+    renderMeetingsGrid();
   }
 
   function renameTeam(teamId, name) {
@@ -743,13 +923,13 @@
       index === null ? `بازه جدید — ${DAYS.find((d) => d.key === day).label}` : "ویرایش بازه";
 
     if (index === null) {
-      el.slotStart.value = "09:00";
-      el.slotEnd.value = "17:00";
+      setTimePickerValue(el.slotStart, "09:00");
+      setTimePickerValue(el.slotEnd, "17:00");
       el.slotForm.querySelector('input[name="slot-type"][value="office"]').checked = true;
     } else {
       const slot = person.schedule[day][index];
-      el.slotStart.value = slot.start;
-      el.slotEnd.value = slot.end;
+      setTimePickerValue(el.slotStart, slot.start);
+      setTimePickerValue(el.slotEnd, slot.end);
       el.slotForm.querySelector(`input[name="slot-type"][value="${slot.type}"]`).checked = true;
     }
     el.slotModal.showModal();
@@ -761,9 +941,15 @@
     const edit = state.editingSlot;
     if (!person || !edit || edit.personId !== person.id) return;
 
-    const start = el.slotStart.value;
-    const end = el.slotEnd.value;
+    const start = getTimePickerValue(el.slotStart);
+    const end = getTimePickerValue(el.slotEnd);
     const type = el.slotForm.querySelector('input[name="slot-type"]:checked').value;
+
+    if (!start || !end) {
+      el.slotError.textContent = "ساعت شروع و پایان را مشخص کنید.";
+      el.slotError.classList.remove("hidden");
+      return;
+    }
 
     if (toMinutes(end) <= toMinutes(start)) {
       el.slotError.textContent = "ساعت پایان باید بعد از شروع باشد.";
@@ -1490,7 +1676,8 @@
   }
 
   function renderLookupResults() {
-    if (!el.lookupTime.value) {
+    const lookupValue = getTimePickerValue(el.lookupTime) || state.lookupTime;
+    if (!lookupValue) {
       el.lookupResults.innerHTML = `
         <div class="empty-state compact">
           <h3>ساعت را مشخص کنید</h3>
@@ -1500,7 +1687,7 @@
       return;
     }
 
-    state.lookupTime = el.lookupTime.value;
+    state.lookupTime = lookupValue;
     const mins = toMinutes(state.lookupTime);
     const selectedDays = DAYS.filter((d) => state.lookupDays.has(d.key));
 
@@ -1794,6 +1981,239 @@
     return h + footer + pad;
   }
 
+  function wrapCanvasText(ctx, text, maxWidth) {
+    const raw = String(text || "").trim();
+    if (!raw) return [];
+    const paragraphs = raw.split(/\n+/);
+    const lines = [];
+    for (const paragraph of paragraphs) {
+      const words = paragraph.split(/\s+/).filter(Boolean);
+      if (!words.length) {
+        lines.push("");
+        continue;
+      }
+      let line = words[0];
+      for (let i = 1; i < words.length; i++) {
+        const next = `${line} ${words[i]}`;
+        if (ctx.measureText(next).width <= maxWidth) {
+          line = next;
+        } else {
+          lines.push(line);
+          line = words[i];
+        }
+      }
+      lines.push(line);
+    }
+    return lines;
+  }
+
+  function meetingPeopleLabel(ids) {
+    const names = resolveMeetingPeople(ids).map((p) => p.name);
+    return names.length ? names.join("، ") : "—";
+  }
+
+  function measureMeetingsExportHeight(meetings) {
+    const pad = 48;
+    const header = 88;
+    const footer = 28;
+    const dayGap = 16;
+    const dayPadY = 22;
+    const titleBlock = 46;
+    const metaH = 46;
+    const groupHeader = 20;
+    const noteHeader = 20;
+    const lineH = 22;
+    let h = pad + header;
+    const measureCanvas = document.createElement("canvas").getContext("2d");
+    measureCanvas.font = "600 14px Vazirmatn, Tahoma, sans-serif";
+    const textMaxW = 1100 - pad * 2 - 72 - 44;
+    for (const day of MEETING_DAYS) {
+      const entry = pruneMeetingIds(meetings[day.key] || emptyMeetingDay());
+      const noteLines = entry.note
+        ? Math.max(1, wrapCanvasText(measureCanvas, entry.note, textMaxW).length)
+        : 1;
+      const verbalLines = Math.max(
+        1,
+        wrapCanvasText(measureCanvas, meetingPeopleLabel(entry.verbalIds), textMaxW).length
+      );
+      const writtenLines = Math.max(
+        1,
+        wrapCanvasText(measureCanvas, meetingPeopleLabel(entry.writtenIds), textMaxW).length
+      );
+      h +=
+        dayPadY * 2 +
+        titleBlock +
+        metaH +
+        groupHeader +
+        verbalLines * lineH +
+        groupHeader +
+        writtenLines * lineH +
+        noteHeader +
+        noteLines * lineH +
+        dayGap;
+    }
+    return h + footer + pad;
+  }
+
+  async function exportMeetingsImage() {
+    const team = getActiveTeam();
+    if (!team) {
+      showToast("ابتدا یک تیم بسازید");
+      return;
+    }
+
+    const btn = document.getElementById("btn-export-meetings");
+    const prevLabel = btn?.textContent;
+    if (btn) {
+      btn.disabled = true;
+      btn.textContent = "در حال ساخت…";
+    }
+
+    try {
+      await document.fonts.ready;
+
+      const meetings = ensureTeamMeetings(team);
+      const teamName = team.name || "تیم";
+      const title = `جلسات دیلی ${teamName}`;
+      const width = 1100;
+      const pad = 48;
+      const height = measureMeetingsExportHeight(meetings);
+      const dpr = Math.min(2, window.devicePixelRatio || 1);
+      const canvas = document.createElement("canvas");
+      canvas.width = Math.round(width * dpr);
+      canvas.height = Math.round(height * dpr);
+      const ctx = canvas.getContext("2d");
+      ctx.scale(dpr, dpr);
+      ctx.direction = "rtl";
+      ctx.textBaseline = "middle";
+
+      const bg = ctx.createLinearGradient(0, 0, width, height);
+      bg.addColorStop(0, "#d7ebe3");
+      bg.addColorStop(0.45, "#eef6f2");
+      bg.addColorStop(1, "#f7fbf9");
+      ctx.fillStyle = bg;
+      ctx.fillRect(0, 0, width, height);
+
+      ctx.fillStyle = "rgba(15, 118, 110, 0.08)";
+      ctx.beginPath();
+      ctx.ellipse(180, 80, 220, 120, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = "rgba(15, 118, 110, 0.05)";
+      ctx.beginPath();
+      ctx.ellipse(width - 160, 140, 200, 110, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      fillRoundRect(ctx, pad, pad, width - pad * 2, height - pad * 2, 28, "rgba(255,255,255,0.82)");
+
+      const contentX = pad + 36;
+      const contentW = width - pad * 2 - 72;
+      let y = pad + 48;
+
+      ctx.fillStyle = "#0f1c1a";
+      ctx.font = "800 28px Vazirmatn, Tahoma, sans-serif";
+      ctx.textAlign = "center";
+      ctx.fillText(title, width / 2, y);
+
+      y += 52;
+
+      const dayPadY = 22;
+      const lineH = 22;
+      const textMaxW = contentW - 44;
+
+      for (const day of MEETING_DAYS) {
+        const entry = pruneMeetingIds(meetings[day.key] || emptyMeetingDay());
+        const noteText = (entry.note || "").trim();
+        ctx.font = "600 14px Vazirmatn, Tahoma, sans-serif";
+        const noteLines = noteText ? wrapCanvasText(ctx, noteText, textMaxW) : ["—"];
+        const verbalLines = wrapCanvasText(ctx, meetingPeopleLabel(entry.verbalIds), textMaxW);
+        const writtenLines = wrapCanvasText(ctx, meetingPeopleLabel(entry.writtenIds), textMaxW);
+        const cardH =
+          dayPadY * 2 +
+          46 +
+          46 +
+          20 +
+          verbalLines.length * lineH +
+          20 +
+          writtenLines.length * lineH +
+          20 +
+          noteLines.length * lineH;
+        const cardX = contentX;
+        const cardY = y;
+
+        fillRoundRect(ctx, cardX, cardY, contentW, cardH, 18, "rgba(243, 247, 245, 0.92)");
+
+        let cy = cardY + dayPadY + 12;
+        ctx.fillStyle = "#0f1c1a";
+        ctx.font = "800 18px Vazirmatn, Tahoma, sans-serif";
+        ctx.textAlign = "right";
+        ctx.fillText(day.label, cardX + contentW - 22, cy);
+
+        cy += 34;
+        ctx.textAlign = "right";
+        ctx.font = "700 12px Vazirmatn, Tahoma, sans-serif";
+        ctx.fillStyle = "#6b807a";
+        ctx.fillText("ساعت جلسه", cardX + contentW - 22, cy - 10);
+        ctx.font = "800 16px Vazirmatn, Tahoma, sans-serif";
+        ctx.fillStyle = "#0f1c1a";
+        ctx.fillText(entry.time ? toFaDigits(entry.time) : "—", cardX + contentW - 22, cy + 12);
+
+        const drawGroup = (title, lines, hasPeople) => {
+          cy += 28;
+          ctx.fillStyle = "#6b807a";
+          ctx.font = "700 13px Vazirmatn, Tahoma, sans-serif";
+          ctx.textAlign = "right";
+          ctx.fillText(title, cardX + contentW - 22, cy);
+          cy += 20;
+          ctx.fillStyle = hasPeople ? "#0f1c1a" : "#6b807a";
+          ctx.font = "600 14px Vazirmatn, Tahoma, sans-serif";
+          for (const line of lines) {
+            ctx.fillText(line, cardX + contentW - 22, cy);
+            cy += lineH;
+          }
+          cy -= 8;
+        };
+
+        drawGroup("دیلی شفاهی", verbalLines, resolveMeetingPeople(entry.verbalIds).length > 0);
+        drawGroup("دیلی مکتوب", writtenLines, resolveMeetingPeople(entry.writtenIds).length > 0);
+
+        cy += 28;
+        ctx.fillStyle = "#6b807a";
+        ctx.font = "700 13px Vazirmatn, Tahoma, sans-serif";
+        ctx.textAlign = "right";
+        ctx.fillText("توضیحات", cardX + contentW - 22, cy);
+
+        cy += 20;
+        ctx.fillStyle = noteText ? "#0f1c1a" : "#6b807a";
+        ctx.font = "600 14px Vazirmatn, Tahoma, sans-serif";
+        for (const line of noteLines) {
+          ctx.fillText(line, cardX + contentW - 22, cy);
+          cy += lineH;
+        }
+
+        y += cardH + 16;
+      }
+
+      const blob = await new Promise((resolve, reject) => {
+        canvas.toBlob((b) => (b ? resolve(b) : reject(new Error("blob"))), "image/png");
+      });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      const safeTeam = teamName.replace(/[\\/:*?"<>|]+/g, "-").trim() || "team";
+      a.href = url;
+      a.download = `barnamino-meetings-${safeTeam}-${new Date().toISOString().slice(0, 10)}.png`;
+      a.click();
+      URL.revokeObjectURL(url);
+      showToast("تصویر جلسات دیلی ذخیره شد");
+    } catch {
+      showToast("ساخت تصویر ممکن نشد");
+    } finally {
+      if (btn) {
+        btn.disabled = false;
+        btn.textContent = prevLabel || "ذخیره تصویر";
+      }
+    }
+  }
+
   async function exportBoardImage() {
     const people = activePeople();
     if (!people.length) {
@@ -2040,6 +2460,155 @@
     reader.readAsText(file, "UTF-8");
   }
 
+  function renderMeetingPeopleChips(dayKey, group, entry, people) {
+    if (!people.length) {
+      return '<p class="meeting-group-hint">عضوی در این تیم نیست.</p>';
+    }
+
+    const selectedIds = new Set(entry[group] || []);
+    const selectedPeople = people.filter((p) => selectedIds.has(p.id));
+    const available = people.filter((p) => !selectedIds.has(p.id));
+
+    const chips = selectedPeople
+      .map(
+        (person) => `
+          <span class="meeting-person-chip active">
+            <span class="dot" style="background:${person.color}"></span>
+            <span>${escapeHtml(person.name)}</span>
+            <button
+              type="button"
+              class="remove meeting-person-remove"
+              data-day="${dayKey}"
+              data-group="${group}"
+              data-person="${person.id}"
+              title="حذف"
+              aria-label="حذف ${escapeHtml(person.name)}"
+            >×</button>
+          </span>`
+      )
+      .join("");
+
+    const addControl = available.length
+      ? `
+        <label class="meeting-add">
+          <span class="sr-only">افزودن عضو</span>
+          <select class="meeting-add-select" data-day="${dayKey}" data-group="${group}">
+            <option value="">+ افزودن</option>
+            ${available
+              .map((person) => `<option value="${person.id}">${escapeHtml(person.name)}</option>`)
+              .join("")}
+          </select>
+        </label>`
+      : "";
+
+    return `
+      <div class="meeting-people">
+        ${chips || '<p class="meeting-group-hint">هنوز کسی اضافه نشده.</p>'}
+        ${addControl}
+      </div>`;
+  }
+
+  function renderMeetingsGrid() {
+    const team = getActiveTeam();
+    if (el.meetingsLead) {
+      el.meetingsLead.textContent = team
+        ? `برنامه دیلی تیم «${team.name}» — ساعت، اعضای شفاهی/مکتوب و توضیحات هر روز.`
+        : "ابتدا یک تیم بسازید تا برنامه جلسات دیلی را تنظیم کنید.";
+    }
+    if (!el.meetingsGrid) return;
+
+    if (!team) {
+      el.meetingsGrid.innerHTML = `
+        <div class="empty-state compact">
+          <h3>تیمی انتخاب نشده</h3>
+          <p>از بخش مدیریت تیم‌ها یک تیم بسازید.</p>
+        </div>`;
+      return;
+    }
+
+    const meetings = ensureTeamMeetings(team);
+    const people = activePeople();
+    const todayKey = dayKeyFromDate();
+
+    el.meetingsGrid.innerHTML = MEETING_DAYS.map((day) => {
+      const entry = pruneMeetingIds(meetings[day.key] || emptyMeetingDay());
+      const isToday = day.key === todayKey;
+      return `
+        <article class="meeting-day${isToday ? " is-today" : ""}" data-day="${day.key}">
+          <div class="meeting-day-name">
+            ${day.label}
+            ${isToday ? '<span class="today-tag">امروز</span>' : ""}
+          </div>
+          <div class="meeting-day-fields">
+            <div class="meeting-times">
+              <div class="meeting-field">
+                <span class="field-label">ساعت جلسه</span>
+                <div class="time-picker meeting-time" data-field="time" role="group" aria-label="ساعت جلسه">
+                  ${timePickerInnerHtml(entry.time || "", true)}
+                </div>
+              </div>
+            </div>
+            <div class="meeting-groups">
+              <div class="meeting-group">
+                <p class="meeting-group-title">دیلی شفاهی</p>
+                ${renderMeetingPeopleChips(day.key, "verbalIds", entry, people)}
+              </div>
+              <div class="meeting-group">
+                <p class="meeting-group-title">دیلی مکتوب</p>
+                ${renderMeetingPeopleChips(day.key, "writtenIds", entry, people)}
+              </div>
+            </div>
+            <label class="meeting-field">
+              <span class="field-label">توضیحات</span>
+              <textarea class="meeting-note" data-field="note" rows="2" maxlength="500" placeholder="مثلاً موضوع جلسه یا لینک تماس…">${escapeHtml(entry.note || "")}</textarea>
+            </label>
+          </div>
+        </article>`;
+    }).join("");
+
+    el.meetingsGrid.querySelectorAll(".meeting-note").forEach((input) => {
+      const dayKey = input.closest("[data-day]")?.dataset.day;
+      const field = input.dataset.field;
+      if (!dayKey || !field) return;
+      input.addEventListener("input", () => {
+        updateMeetingField(dayKey, field, input.value);
+      });
+    });
+
+    el.meetingsGrid.querySelectorAll(".meeting-time").forEach((picker) => {
+      const dayKey = picker.closest("[data-day]")?.dataset.day;
+      const field = picker.dataset.field;
+      if (!dayKey || !field) return;
+      const hour = picker.querySelector(".time-hour");
+      const minute = picker.querySelector(".time-minute");
+      const sync = (source) => {
+        if (source.value === "") {
+          hour.value = "";
+          minute.value = "";
+        } else {
+          if (hour.value === "") hour.value = "0";
+          if (minute.value === "") minute.value = "0";
+        }
+        updateMeetingField(dayKey, field, getTimePickerValue(picker));
+      };
+      hour.addEventListener("change", () => sync(hour));
+      minute.addEventListener("change", () => sync(minute));
+    });
+
+    el.meetingsGrid.querySelectorAll(".meeting-person-remove").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        removeMeetingPerson(btn.dataset.day, btn.dataset.group, btn.dataset.person);
+      });
+    });
+
+    el.meetingsGrid.querySelectorAll(".meeting-add-select").forEach((select) => {
+      select.addEventListener("change", () => {
+        if (!select.value) return;
+        addMeetingPerson(select.dataset.day, select.dataset.group, select.value);
+      });
+    });
+  }
+
   function switchTab(tab) {
     document.querySelectorAll(".tab").forEach((btn) => {
       const active = btn.dataset.tab === tab;
@@ -2063,6 +2632,9 @@
       renderLookupDayChips();
       renderLookupResults();
     }
+    if (tab === "meetings") {
+      renderMeetingsGrid();
+    }
   }
 
   function render() {
@@ -2076,6 +2648,7 @@
     renderTeamBoard();
     renderLookupDayChips();
     renderLookupResults();
+    renderMeetingsGrid();
   }
 
   function bindEvents() {
@@ -2084,6 +2657,7 @@
     document.getElementById("btn-delete-person").addEventListener("click", deleteSelectedPerson);
     document.getElementById("btn-export").addEventListener("click", exportJson);
     document.getElementById("btn-export-board").addEventListener("click", exportBoardImage);
+    document.getElementById("btn-export-meetings").addEventListener("click", exportMeetingsImage);
     document.getElementById("btn-who-now").addEventListener("click", openNowModal);
     document.getElementById("now-close").addEventListener("click", () => el.nowModal.close());
     document.getElementById("now-refresh").addEventListener("click", renderNowModal);
@@ -2138,10 +2712,15 @@
       });
     });
 
-    el.lookupTime.addEventListener("input", () => {
-      state.lookupTime = el.lookupTime.value || "10:00";
-      renderLookupResults();
+    mountTimePicker(el.lookupTime, {
+      value: state.lookupTime,
+      onChange: (value) => {
+        state.lookupTime = value || "10:00";
+        renderLookupResults();
+      },
     });
+    mountTimePicker(el.slotStart, { value: "09:00" });
+    mountTimePicker(el.slotEnd, { value: "17:00" });
 
     document.querySelectorAll("#lookup-mode .chip").forEach((chip) => {
       chip.addEventListener("click", () => {
@@ -2179,7 +2758,7 @@
     const hh = String(now.getHours()).padStart(2, "0");
     const mm = String(now.getMinutes()).padStart(2, "0");
     state.lookupTime = `${hh}:${mm}`;
-    el.lookupTime.value = state.lookupTime;
+    setTimePickerValue(el.lookupTime, state.lookupTime);
     updateAccessUi();
     await bootLoad();
     render();

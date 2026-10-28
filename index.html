@@ -56,6 +56,9 @@
     <button type="button" class="tab" role="tab" aria-selected="false" data-tab="lookup">
       جستجو با ساعت
     </button>
+    <button type="button" class="tab" role="tab" aria-selected="false" data-tab="meetings">
+      جلسات دیلی
+    </button>
   </nav>
 
   <main>
@@ -173,8 +176,8 @@
         <p class="lead">یک ساعت و یک یا چند روز را مشخص کنید تا ببینید چه کسانی در آن زمان مشغول‌اند.</p>
 
         <div class="filter-row">
-          <label class="field-label" for="lookup-time">ساعت</label>
-          <input type="time" id="lookup-time" class="input lookup-time" value="10:00" />
+          <span class="field-label" id="lookup-time-label">ساعت</span>
+          <div id="lookup-time" class="time-picker lookup-time" role="group" aria-labelledby="lookup-time-label"></div>
         </div>
 
         <div class="filter-row">
@@ -203,6 +206,23 @@
           <h3>نتیجه‌ای نیست</h3>
           <p>حداقل یک روز را انتخاب کنید.</p>
         </div>
+      </div>
+    </section>
+
+    <section id="panel-meetings" class="panel" role="tabpanel" hidden>
+      <div class="meetings-shell">
+        <div class="meetings-head">
+          <div>
+            <h2>برنامه جلسات دیلی</h2>
+            <p class="lead" id="meetings-lead">برای تیم فعال، ساعت جلسه، اعضای دیلی شفاهی/مکتوب و توضیحات هر روز را مشخص کنید.</p>
+          </div>
+          <div class="meetings-head-actions">
+            <button type="button" class="btn primary compact" id="btn-export-meetings" title="ذخیره تصویر برنامه جلسات دیلی">
+              ذخیره تصویر
+            </button>
+          </div>
+        </div>
+        <div id="meetings-grid" class="meetings-grid"></div>
       </div>
     </section>
   </main>
@@ -255,11 +275,11 @@
       <div class="modal-fields">
         <label>
           از ساعت
-          <input type="time" id="slot-start" required value="09:00" />
+          <div id="slot-start" class="time-picker" role="group" aria-label="از ساعت"></div>
         </label>
         <label>
           تا ساعت
-          <input type="time" id="slot-end" required value="17:00" />
+          <div id="slot-end" class="time-picker" role="group" aria-label="تا ساعت"></div>
         </label>
         <fieldset class="type-fieldset">
           <legend>نوع</legend>

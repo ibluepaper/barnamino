@@ -15,6 +15,7 @@ Plain HTML, CSS, and JavaScript. Open `index.html` in a browser.
 - **Lookup by time**: pick a clock time and one or more days to see who’s scheduled then
 - **Team board**: a single timeline view of everyone on the active team
 - **Who’s working now?**: people currently on the clock (active team), and until when
+- **Daily meetings**: per-team schedule with meeting time, oral/written assignees, and notes for each day
 - Persist to `data.json`, plus JSON import / export
 
 ## Run
@@ -36,7 +37,19 @@ Without file permission, data is still kept in the browser’s `localStorage`. A
   "app": "barnamino",
   "exportedAt": "2026-10-28T07:34:50.305Z",
   "teams": [
-    { "id": "…", "name": "تیم محصول" },
+    {
+      "id": "…",
+      "name": "تیم محصول",
+      "dailyMeetings": {
+        "sat": {
+          "time": "10:00",
+          "note": "اسپرینت",
+          "verbalIds": ["…"],
+          "writtenIds": ["…"]
+        },
+        "sun": { "time": "", "note": "", "verbalIds": [], "writtenIds": [] }
+      }
+    },
     { "id": "…", "name": "تیم پشتیبانی" }
   ],
   "activeTeamId": "…",
@@ -62,7 +75,12 @@ Without file permission, data is still kept in the browser’s `localStorage`. A
 
 | Field | Meaning |
 |-------|---------|
-| `teams` | List of teams (`id`, `name`) |
+| `teams` | List of teams (`id`, `name`, optional `dailyMeetings`) |
+| `dailyMeetings` | Per-day meeting plan for that team (`time`, `note`, `verbalIds`, `writtenIds`) |
+| `time` | Daily meeting clock time (`HH:MM`); empty = no meeting |
+| `verbalIds` | People assigned to oral daily for that day |
+| `writtenIds` | People assigned to written daily for that day |
+| `note` | Free-text notes for that day’s meeting |
 | `activeTeamId` | Currently selected team |
 | `teamIds` | Teams this person belongs to (one or more) |
 | `start` / `end` | Start and end time (`HH:MM`) |
@@ -86,6 +104,7 @@ Older `version: 1` files (no `teams`) are migrated automatically into a default 
 | Shared ranges | Select people and compute full intersection, or max concurrency per day |
 | Lookup by time | Pick a time + days; list who’s available then (active team) |
 | Who’s working now? | People currently working right now (active team) |
+| Daily meetings | Per-team daily standup (Sat–Thu): time, oral/written people, and notes (export as image) |
 
 ## Project files
 
