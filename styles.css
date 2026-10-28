@@ -178,6 +178,7 @@ body {
 
 .tabs {
   display: flex;
+  flex-wrap: wrap;
   gap: 0.35rem;
   padding: 0.8rem clamp(1rem, 4vw, 2.5rem) 0;
   animation: rise 0.7s var(--ease) 0.08s both;
@@ -247,6 +248,8 @@ main {
 .schedule-pane,
 .overlap-setup,
 .overlap-results,
+.lookup-setup,
+.lookup-results,
 .board-shell {
   background: rgba(255, 255, 255, 0.72);
   backdrop-filter: blur(14px);
@@ -271,6 +274,7 @@ main {
 
 .aside-head h2,
 .overlap-setup h2,
+.lookup-setup h2,
 .editor-head h2 {
   margin: 0;
   font-size: 1.05rem;
@@ -445,7 +449,8 @@ main {
 }
 
 .input,
-.modal input[type="time"] {
+.modal input[type="time"],
+.lookup-time {
   font: inherit;
   border: 1px solid var(--line);
   background: #fff;
@@ -457,7 +462,8 @@ main {
 }
 
 .input:focus,
-.modal input[type="time"]:focus {
+.modal input[type="time"]:focus,
+.lookup-time:focus {
   border-color: var(--teal);
   box-shadow: 0 0 0 3px rgba(20, 184, 166, 0.2);
 }
@@ -634,7 +640,8 @@ main {
   align-self: start;
 }
 
-#panel-overlap.active {
+#panel-overlap.active,
+#panel-lookup.active {
   grid-template-columns: minmax(280px, 380px) 1fr;
   gap: 1rem;
 }
@@ -644,7 +651,8 @@ main {
 }
 
 @media (max-width: 860px) {
-  #panel-overlap.active {
+  #panel-overlap.active,
+  #panel-lookup.active {
     grid-template-columns: 1fr;
   }
 }
@@ -1012,8 +1020,90 @@ main {
   }
 }
 
-.overlap-setup {
+.overlap-setup,
+.lookup-setup {
   padding: 1.25rem;
+}
+
+.lookup-setup {
+  display: flex;
+  flex-direction: column;
+  gap: 1.1rem;
+}
+
+.lookup-setup .filter-row {
+  margin: 0;
+}
+
+.lookup-time {
+  width: 100%;
+  max-width: 11rem;
+  direction: ltr;
+}
+
+.lookup-days-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.lookup-days-head .field-label {
+  margin-bottom: 0;
+}
+
+.lookup-day-actions {
+  display: flex;
+  gap: 0.25rem;
+}
+
+.lookup-results {
+  padding: 1.25rem;
+}
+
+.lookup-day-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+
+.lookup-all-days {
+  margin-bottom: 1.1rem;
+  padding: 0.9rem 1rem;
+  border-radius: 12px;
+  background: linear-gradient(120deg, rgba(13, 148, 136, 0.1), rgba(255, 255, 255, 0.55));
+  border: 1px solid rgba(15, 118, 110, 0.14);
+  animation: fadeIn 0.35s var(--ease) both;
+}
+
+.lookup-all-days h3 {
+  margin: 0 0 0.65rem;
+  font-size: 0.92rem;
+}
+
+.lookup-all-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.lookup-name-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.35rem 0.7rem;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.85);
+  border: 1px solid var(--line);
+  font-size: 0.84rem;
+  font-weight: 700;
+}
+
+.lookup-name-chip .dot {
+  width: 0.55rem;
+  height: 0.55rem;
+  border-radius: 50%;
+  flex-shrink: 0;
 }
 
 .lead {

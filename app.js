@@ -43,6 +43,9 @@
     editingSlot: null, // { personId, day, index } or null for new
     fileHandle: null,
     boardDayFilter: "all",
+    lookupTime: "10:00",
+    lookupDays: new Set(),
+    lookupMode: "any",
   };
 
   const el = {
@@ -72,6 +75,9 @@
     nowModal: document.getElementById("now-modal"),
     nowList: document.getElementById("now-list"),
     nowClock: document.getElementById("now-clock"),
+    lookupTime: document.getElementById("lookup-time"),
+    lookupDays: document.getElementById("lookup-days"),
+    lookupResults: document.getElementById("lookup-results"),
   };
 
   function uid() {
@@ -927,6 +933,170 @@
     el.nowModal.showModal();
   }
 
+  function slotCoversTime(slot, mins, mode) {
+    const start = toMinutes(slot.start);
+    const end = toMinutes(slot.end);
+    if (!(mins >= start && mins < end)) return false;
+    if (mode === "office" || mode === "remote") return slot.type === mode;
+    return true;
+  }
+
+  function findPeopleAtTime(dayKey, mins, mode) {
+    const list = [];
+    for (const person of state.people) {
+      for (const slot of person.schedule[dayKey] || []) {
+        if (slotCoversTime(slot, mins, mode)) {
+          list.push({ person, slot });
+          break;
+        }
+      }
+    }
+    list.sort((a, b) => a.person.name.localeCompare(b.person.name, "fa"));
+    return list;
+  }
+
+  function peopleOnAllLookupDays(byDay) {
+    const days = [...state.lookupDays];
+    if (days.length < 2) return [];
+    const counts = new Map();
+    for (const dayKey of days) {
+      for (const item of byDay[dayKey] || []) {
+        counts.set(item.person.id, (counts.get(item.person.id) || 0) + 1);
+      }
+    }
+    return state.people.filter((p) => counts.get(p.id) === days.length);
+  }
+
+  function renderLookupDayChips() {
+    el.lookupDays.innerHTML = "";
+    for (const day of DAYS) {
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = `chip${state.lookupDays.has(day.key) ? " active" : ""}`;
+      btn.dataset.day = day.key;
+      btn.textContent = day.label;
+      btn.addEventListener("click", () => {
+        if (state.lookupDays.has(day.key)) state.lookupDays.delete(day.key);
+        else state.lookupDays.add(day.key);
+        renderLookupDayChips();
+        renderLookupResults();
+      });
+      el.lookupDays.appendChild(btn);
+    }
+  }
+
+  function renderLookupPersonRow(item) {
+    return `
+      <div class="now-item lookup-person">
+        <span class="dot" style="background:${item.person.color}"></span>
+        <div class="meta">
+          <strong title="${escapeHtml(item.person.name)}">${escapeHtml(item.person.name)}</strong>
+          <span>${typeLabel(item.slot.type)} · ${formatRange(item.slot.start, item.slot.end)}</span>
+        </div>
+        <div class="until">
+          <span class="until-time">تا ${toFaDigits(item.slot.end)}</span>
+        </div>
+      </div>
+    `;
+  }
+
+  function renderLookupResults() {
+    if (!el.lookupTime.value) {
+      el.lookupResults.innerHTML = `
+        <div class="empty-state compact">
+          <h3>ساعت را مشخص کنید</h3>
+          <p>یک ساعت برای جستجو وارد کنید.</p>
+        </div>
+      `;
+      return;
+    }
+
+    state.lookupTime = el.lookupTime.value;
+    const mins = toMinutes(state.lookupTime);
+    const selectedDays = DAYS.filter((d) => state.lookupDays.has(d.key));
+
+    if (!selectedDays.length) {
+      el.lookupResults.innerHTML = `
+        <div class="empty-state compact">
+          <h3>نتیجه‌ای نیست</h3>
+          <p>حداقل یک روز را انتخاب کنید.</p>
+        </div>
+      `;
+      return;
+    }
+
+    if (!state.people.length) {
+      el.lookupResults.innerHTML = `
+        <div class="empty-state compact">
+          <h3>فردی تعریف نشده</h3>
+          <p>ابتدا از بخش افراد، اعضای تیم را اضافه کنید.</p>
+        </div>
+      `;
+      return;
+    }
+
+    const byDay = {};
+    let totalHits = 0;
+    for (const day of selectedDays) {
+      byDay[day.key] = findPeopleAtTime(day.key, mins, state.lookupMode);
+      totalHits += byDay[day.key].length;
+    }
+
+    const allDaysPeople = peopleOnAllLookupDays(byDay);
+    const timeLabel = toFaDigits(state.lookupTime);
+
+    let html = `
+      <div class="summary-bar">
+        <span>ساعت <bdi>${timeLabel}</bdi></span>
+        <span>${toFaDigits(selectedDays.length)} روز · ${toFaDigits(totalHits)} مورد</span>
+      </div>
+    `;
+
+    if (selectedDays.length > 1 && allDaysPeople.length) {
+      html += `
+        <div class="lookup-all-days">
+          <h3>در همهٔ روزهای انتخاب‌شده</h3>
+          <div class="lookup-all-chips">
+            ${allDaysPeople
+              .map(
+                (p) => `
+              <span class="lookup-name-chip">
+                <span class="dot" style="background:${p.color}"></span>
+                ${escapeHtml(p.name)}
+              </span>
+            `
+              )
+              .join("")}
+          </div>
+        </div>
+      `;
+    }
+
+    if (totalHits === 0) {
+      html += `
+        <div class="empty-state compact">
+          <h3>کسی پیدا نشد</h3>
+          <p>در ساعت <bdi>${timeLabel}</bdi> و روزهای انتخاب‌شده کسی طبق برنامه مشغول نیست.</p>
+        </div>
+      `;
+      el.lookupResults.innerHTML = html;
+      return;
+    }
+
+    for (const day of selectedDays) {
+      const list = byDay[day.key];
+      html += `<article class="day-result"><h3>${day.label}</h3>`;
+      if (!list.length) {
+        html += `<p class="no-overlap-day">کسی در این ساعت نیست</p>`;
+      } else {
+        html += `<div class="lookup-day-list">${list.map(renderLookupPersonRow).join("")}</div>`;
+      }
+      html += `</article>`;
+    }
+
+    el.lookupResults.innerHTML = html;
+  }
+
   function renderOverlapResults() {
     const result = computeOverlaps();
     if (!result) {
@@ -1049,6 +1219,10 @@
       renderBoardFilters();
       renderTeamBoard();
     }
+    if (tab === "lookup") {
+      renderLookupDayChips();
+      renderLookupResults();
+    }
   }
 
   function render() {
@@ -1061,6 +1235,8 @@
     renderOverlapResults();
     renderBoardFilters();
     renderTeamBoard();
+    renderLookupDayChips();
+    renderLookupResults();
   }
 
   function bindEvents() {
@@ -1095,6 +1271,32 @@
       });
     });
 
+    el.lookupTime.addEventListener("input", () => {
+      state.lookupTime = el.lookupTime.value || "10:00";
+      renderLookupResults();
+    });
+
+    document.querySelectorAll("#lookup-mode .chip").forEach((chip) => {
+      chip.addEventListener("click", () => {
+        document.querySelectorAll("#lookup-mode .chip").forEach((c) => c.classList.remove("active"));
+        chip.classList.add("active");
+        state.lookupMode = chip.dataset.mode;
+        renderLookupResults();
+      });
+    });
+
+    document.getElementById("lookup-days-all").addEventListener("click", () => {
+      state.lookupDays = new Set(DAYS.map((d) => d.key));
+      renderLookupDayChips();
+      renderLookupResults();
+    });
+
+    document.getElementById("lookup-days-none").addEventListener("click", () => {
+      state.lookupDays = new Set();
+      renderLookupDayChips();
+      renderLookupResults();
+    });
+
     document.getElementById("slot-cancel").addEventListener("click", () => {
       el.slotModal.close();
     });
@@ -1103,6 +1305,14 @@
 
   async function boot() {
     bindEvents();
+    if (!state.lookupDays.size) {
+      state.lookupDays.add(dayKeyFromDate());
+    }
+    const now = new Date();
+    const hh = String(now.getHours()).padStart(2, "0");
+    const mm = String(now.getMinutes()).padStart(2, "0");
+    state.lookupTime = `${hh}:${mm}`;
+    el.lookupTime.value = state.lookupTime;
     updateAccessUi();
     await bootLoad();
     render();

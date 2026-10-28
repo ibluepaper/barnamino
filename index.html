@@ -46,6 +46,9 @@
     <button type="button" class="tab" role="tab" aria-selected="false" data-tab="overlap">
       بازه‌های مشترک
     </button>
+    <button type="button" class="tab" role="tab" aria-selected="false" data-tab="lookup">
+      جستجو با ساعت
+    </button>
   </nav>
 
   <main>
@@ -128,6 +131,45 @@
         <div class="empty-state compact">
           <h3>نتیجه‌ای نیست</h3>
           <p>حداقل دو نفر را انتخاب کنید.</p>
+        </div>
+      </div>
+    </section>
+
+    <section id="panel-lookup" class="panel" role="tabpanel" hidden>
+      <div class="lookup-setup">
+        <h2>جستجو با ساعت</h2>
+        <p class="lead">یک ساعت و یک یا چند روز را مشخص کنید تا ببینید چه کسانی در آن زمان مشغول‌اند.</p>
+
+        <div class="filter-row">
+          <label class="field-label" for="lookup-time">ساعت</label>
+          <input type="time" id="lookup-time" class="input lookup-time" value="10:00" />
+        </div>
+
+        <div class="filter-row">
+          <div class="lookup-days-head">
+            <span class="field-label">روزها</span>
+            <div class="lookup-day-actions">
+              <button type="button" class="btn ghost compact" id="lookup-days-all">همه</button>
+              <button type="button" class="btn ghost compact" id="lookup-days-none">هیچ‌کدام</button>
+            </div>
+          </div>
+          <div class="chip-group" id="lookup-days" role="group" aria-label="انتخاب روز"></div>
+        </div>
+
+        <div class="filter-row">
+          <span class="field-label">نوع حضور</span>
+          <div class="chip-group" id="lookup-mode" role="group" aria-label="فیلتر نوع حضور">
+            <button type="button" class="chip active" data-mode="any">هر نوع</button>
+            <button type="button" class="chip" data-mode="office">فقط حضوری</button>
+            <button type="button" class="chip" data-mode="remote">فقط دورکاری</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="lookup-results" id="lookup-results">
+        <div class="empty-state compact">
+          <h3>نتیجه‌ای نیست</h3>
+          <p>حداقل یک روز را انتخاب کنید.</p>
         </div>
       </div>
     </section>

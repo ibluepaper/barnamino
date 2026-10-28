@@ -10,6 +10,7 @@ Plain HTML, CSS, and JavaScript. Open `index.html` in a browser.
 - Weekly schedule (Saturday–Friday) with multiple time ranges per day
 - Mark each range as **on-site** (`office`) or **remote**
 - Find **shared time ranges** across selected people (with presence-type filters)
+- **Lookup by time**: pick a clock time and one or more days to see who’s scheduled then
 - **Team board**: a single timeline view of everyone
 - **Who’s working now?**: people currently on the clock, and until when
 - Persist to `data.json`, plus JSON import / export
@@ -69,6 +70,7 @@ Without file permission, data is still kept in the browser’s `localStorage`. A
 | People & schedule | Add people and edit weekly ranges |
 | Team board | Timeline overview for the whole team |
 | Shared ranges | Select people and compute overlapping times |
+| Lookup by time | Pick a time + days; list who’s available then |
 | Who’s working now? | People currently working right now |
 
 ## Project files
