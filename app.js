@@ -68,6 +68,8 @@
     lookupTime: "10:00",
     lookupDays: new Set(),
     lookupMode: "any",
+    hoursDays: new Set(),
+    hoursMode: "any",
     meetingExportMode: "all", // "all" | "split2" | "custom"
     meetingExportParts: [
       ["sat", "sun", "mon"],
@@ -110,6 +112,8 @@
     lookupTime: document.getElementById("lookup-time"),
     lookupDays: document.getElementById("lookup-days"),
     lookupResults: document.getElementById("lookup-results"),
+    hoursDays: document.getElementById("hours-days"),
+    hoursResults: document.getElementById("hours-results"),
     teamSelect: document.getElementById("team-select"),
     teamsModal: document.getElementById("teams-modal"),
     teamsList: document.getElementById("teams-list"),
@@ -300,8 +304,14 @@
     return mins > 0 ? mins : 0;
   }
 
-  function totalScheduleMinutes(person, type = null) {
-    return DAYS.reduce((sum, d) => {
+  function selectedDayList(dayKeys) {
+    if (!dayKeys) return DAYS;
+    const keys = dayKeys instanceof Set ? dayKeys : new Set(dayKeys);
+    return DAYS.filter((d) => keys.has(d.key));
+  }
+
+  function totalScheduleMinutes(person, type = null, dayKeys = null) {
+    return selectedDayList(dayKeys).reduce((sum, d) => {
       const slots = person.schedule[d.key] || [];
       return sum + slots.reduce((s, slot) => {
         if (type && slot.type !== type) return s;
@@ -1781,6 +1791,116 @@
     el.lookupResults.innerHTML = html;
   }
 
+  function renderHoursDayChips() {
+    el.hoursDays.innerHTML = "";
+    for (const day of DAYS) {
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = `chip${state.hoursDays.has(day.key) ? " active" : ""}`;
+      btn.dataset.day = day.key;
+      btn.textContent = day.label;
+      btn.addEventListener("click", () => {
+        if (state.hoursDays.has(day.key)) state.hoursDays.delete(day.key);
+        else state.hoursDays.add(day.key);
+        renderHoursDayChips();
+        renderHoursResults();
+      });
+      el.hoursDays.appendChild(btn);
+    }
+  }
+
+  function renderHoursPersonRow(person, totalMins, mode) {
+    const total = formatHoursTotal(totalMins);
+    let detail = "";
+    if (mode === "any") {
+      const office = formatHoursTotal(totalScheduleMinutes(person, "office", state.hoursDays));
+      const remote = formatHoursTotal(totalScheduleMinutes(person, "remote", state.hoursDays));
+      detail = `
+        <span class="hours-person-splits">
+          <span class="hours-split office">حضوری: <bdi>${office}</bdi></span>
+          <span class="hours-split remote">دورکاری: <bdi>${remote}</bdi></span>
+        </span>
+      `;
+    } else {
+      detail = `<span>${typeLabel(mode)}</span>`;
+    }
+    return `
+      <div class="now-item hours-person">
+        <span class="dot" style="background:${person.color}"></span>
+        <div class="meta">
+          <strong title="${escapeHtml(person.name)}">${escapeHtml(person.name)}</strong>
+          ${detail}
+        </div>
+        <div class="until">
+          <span class="until-time hours-person-total"><bdi>${total}</bdi></span>
+        </div>
+      </div>
+    `;
+  }
+
+  function renderHoursResults() {
+    const selectedDays = selectedDayList(state.hoursDays);
+
+    if (!selectedDays.length) {
+      el.hoursResults.innerHTML = `
+        <div class="empty-state compact">
+          <h3>نتیجه‌ای نیست</h3>
+          <p>حداقل یک روز را انتخاب کنید.</p>
+        </div>
+      `;
+      return;
+    }
+
+    const people = activePeople();
+    if (!people.length) {
+      el.hoursResults.innerHTML = `
+        <div class="empty-state compact">
+          <h3>فردی در این تیم نیست</h3>
+          <p>ابتدا از بخش افراد، اعضای این تیم را اضافه کنید.</p>
+        </div>
+      `;
+      return;
+    }
+
+    const mode = state.hoursMode === "office" || state.hoursMode === "remote"
+      ? state.hoursMode
+      : null;
+    const rows = people
+      .map((person) => ({
+        person,
+        mins: totalScheduleMinutes(person, mode, state.hoursDays),
+      }))
+      .sort((a, b) => b.mins - a.mins || a.person.name.localeCompare(b.person.name, "fa"));
+
+    const grandTotal = rows.reduce((sum, row) => sum + row.mins, 0);
+    const dayLabels = selectedDays.map((d) => d.label).join("، ");
+
+    let html = `
+      <div class="summary-bar">
+        <span>${toFaDigits(selectedDays.length)} روز انتخاب‌شده</span>
+        <span>جمع کل تیم: <strong><bdi>${formatHoursTotal(grandTotal)}</bdi></strong></span>
+      </div>
+      <p class="hours-days-caption">${escapeHtml(dayLabels)}</p>
+    `;
+
+    if (grandTotal <= 0) {
+      html += `
+        <div class="empty-state compact">
+          <h3>ساعتی ثبت نشده</h3>
+          <p>در روزهای انتخاب‌شده هیچ بازهٔ کاری برای اعضای این تیم نیست.</p>
+        </div>
+      `;
+      el.hoursResults.innerHTML = html;
+      return;
+    }
+
+    html += `<div class="hours-people-list">${rows
+      .map((row) => renderHoursPersonRow(row.person, row.mins, state.hoursMode))
+      .join("")}</div>`;
+
+    el.hoursResults.innerHTML = html;
+  }
+
   function personChipsHtml(ids, peopleById) {
     return [...ids]
       .sort((a, b) => {
@@ -2807,6 +2927,10 @@
       renderLookupDayChips();
       renderLookupResults();
     }
+    if (tab === "hours") {
+      renderHoursDayChips();
+      renderHoursResults();
+    }
     if (tab === "meetings") {
       renderMeetingsGrid();
     }
@@ -2823,6 +2947,8 @@
     renderTeamBoard();
     renderLookupDayChips();
     renderLookupResults();
+    renderHoursDayChips();
+    renderHoursResults();
     renderMeetingsGrid();
   }
 
@@ -2931,6 +3057,27 @@
       renderLookupResults();
     });
 
+    document.querySelectorAll("#hours-mode .chip").forEach((chip) => {
+      chip.addEventListener("click", () => {
+        document.querySelectorAll("#hours-mode .chip").forEach((c) => c.classList.remove("active"));
+        chip.classList.add("active");
+        state.hoursMode = chip.dataset.mode;
+        renderHoursResults();
+      });
+    });
+
+    document.getElementById("hours-days-all").addEventListener("click", () => {
+      state.hoursDays = new Set(DAYS.map((d) => d.key));
+      renderHoursDayChips();
+      renderHoursResults();
+    });
+
+    document.getElementById("hours-days-none").addEventListener("click", () => {
+      state.hoursDays = new Set();
+      renderHoursDayChips();
+      renderHoursResults();
+    });
+
     document.getElementById("slot-cancel").addEventListener("click", () => {
       el.slotModal.close();
     });
@@ -2941,6 +3088,9 @@
     bindEvents();
     if (!state.lookupDays.size) {
       state.lookupDays.add(dayKeyFromDate());
+    }
+    if (!state.hoursDays.size) {
+      state.hoursDays = new Set(DAYS.map((d) => d.key));
     }
     const now = new Date();
     const hh = String(now.getHours()).padStart(2, "0");

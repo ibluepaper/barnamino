@@ -13,6 +13,7 @@ Plain HTML, CSS, and JavaScript. Open `index.html` in a browser.
 - Find **shared time ranges** across selected people (with presence-type filters)
 - **Max daily overlap**: see the densest windows per day (e.g. 5 people for 30 minutes, or everyone together)
 - **Lookup by time**: pick a clock time and one or more days to see who’s scheduled then
+- **Hours totals**: select one or more days to see each member’s total hours and the team grand total
 - **Team board**: a single timeline view of everyone on the active team
 - **Who’s working now?**: people currently on the clock (active team), and until when
 - **Daily meetings**: per-team schedule with meeting time, oral/written assignees, and notes for each day

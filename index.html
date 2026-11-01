@@ -56,6 +56,9 @@
     <button type="button" class="tab" role="tab" aria-selected="false" data-tab="lookup">
       جستجو با ساعت
     </button>
+    <button type="button" class="tab" role="tab" aria-selected="false" data-tab="hours">
+      مجموع ساعات
+    </button>
     <button type="button" class="tab" role="tab" aria-selected="false" data-tab="meetings">
       جلسات دیلی
     </button>
@@ -202,6 +205,40 @@
       </div>
 
       <div class="lookup-results" id="lookup-results">
+        <div class="empty-state compact">
+          <h3>نتیجه‌ای نیست</h3>
+          <p>حداقل یک روز را انتخاب کنید.</p>
+        </div>
+      </div>
+    </section>
+
+    <section id="panel-hours" class="panel" role="tabpanel" hidden>
+      <div class="lookup-setup hours-setup">
+        <h2>مجموع ساعات</h2>
+        <p class="lead">روزهای موردنظر را انتخاب کنید تا ببینید هر عضو تیم در این روزها چند ساعت کار می‌کند.</p>
+
+        <div class="filter-row">
+          <div class="lookup-days-head">
+            <span class="field-label">روزها</span>
+            <div class="lookup-day-actions">
+              <button type="button" class="btn ghost compact" id="hours-days-all">همه</button>
+              <button type="button" class="btn ghost compact" id="hours-days-none">هیچ‌کدام</button>
+            </div>
+          </div>
+          <div class="chip-group" id="hours-days" role="group" aria-label="انتخاب روز برای مجموع ساعات"></div>
+        </div>
+
+        <div class="filter-row">
+          <span class="field-label">نوع حضور</span>
+          <div class="chip-group" id="hours-mode" role="group" aria-label="فیلتر نوع حضور">
+            <button type="button" class="chip active" data-mode="any">هر نوع</button>
+            <button type="button" class="chip" data-mode="office">فقط حضوری</button>
+            <button type="button" class="chip" data-mode="remote">فقط دورکاری</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="lookup-results hours-results" id="hours-results">
         <div class="empty-state compact">
           <h3>نتیجه‌ای نیست</h3>
           <p>حداقل یک روز را انتخاب کنید.</p>

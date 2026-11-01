@@ -293,6 +293,15 @@ main {
   box-shadow: var(--shadow);
 }
 
+.hours-setup,
+.hours-results {
+  background: rgba(255, 255, 255, 0.72);
+  backdrop-filter: blur(14px);
+  border: 1px solid rgba(255, 255, 255, 0.65);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+}
+
 .people-aside {
   padding: 1.1rem;
   display: flex;
@@ -921,7 +930,8 @@ main {
 }
 
 #panel-overlap.active,
-#panel-lookup.active {
+#panel-lookup.active,
+#panel-hours.active {
   grid-template-columns: minmax(280px, 380px) 1fr;
   gap: 1rem;
 }
@@ -933,7 +943,8 @@ main {
 
 @media (max-width: 860px) {
   #panel-overlap.active,
-  #panel-lookup.active {
+  #panel-lookup.active,
+  #panel-hours.active {
     grid-template-columns: 1fr;
   }
 }
@@ -1351,6 +1362,49 @@ main {
 
 .lookup-results {
   padding: 1.25rem;
+}
+
+.hours-results {
+  padding: 1.25rem;
+}
+
+.hours-days-caption {
+  margin: -0.35rem 0 1rem;
+  color: var(--muted);
+  font-size: 0.88rem;
+}
+
+.hours-people-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+
+.hours-person .meta {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.hours-person-splits {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem 0.85rem;
+  font-size: 0.82rem;
+  color: var(--muted);
+}
+
+.hours-person-splits .hours-split.office {
+  color: var(--office);
+}
+
+.hours-person-splits .hours-split.remote {
+  color: var(--remote);
+}
+
+.hours-person-total {
+  font-weight: 700;
+  color: var(--teal-deep);
 }
 
 .lookup-day-list {
