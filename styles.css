@@ -1219,10 +1219,32 @@ main {
 .now-list {
   display: flex;
   flex-direction: column;
-  gap: 0.55rem;
-  max-height: min(50vh, 360px);
+  gap: 1rem;
+  max-height: min(60vh, 480px);
   overflow-x: hidden;
   overflow-y: auto;
+}
+
+.now-section {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+}
+
+.now-section-title {
+  margin: 0;
+  font-size: 0.8rem;
+  font-weight: 800;
+  color: var(--ink);
+  display: flex;
+  align-items: baseline;
+  gap: 0.35rem;
+}
+
+.now-section-title span {
+  font-weight: 700;
+  color: var(--muted);
+  font-size: 0.75rem;
 }
 
 .now-item {
@@ -1237,6 +1259,23 @@ main {
   animation: fadeIn 0.3s var(--ease) both;
   min-width: 0;
   box-sizing: border-box;
+}
+
+.now-item-upcoming {
+  background: linear-gradient(120deg, rgba(180, 120, 40, 0.1), rgba(255, 255, 255, 0.7));
+}
+
+.now-item-upcoming .until-time {
+  color: #9a5b14;
+}
+
+.now-item-left {
+  background: linear-gradient(120deg, rgba(15, 28, 26, 0.05), rgba(255, 255, 255, 0.65));
+  opacity: 0.88;
+}
+
+.now-item-left .until-time {
+  color: var(--muted);
 }
 
 .now-item .dot {

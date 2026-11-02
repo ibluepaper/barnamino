@@ -385,26 +385,67 @@
     state.overlapIds = new Set([...state.overlapIds].filter((id) => activeIds.has(id)));
   }
 
-  function getCurrentlyWorking(date = new Date()) {
+  function getTodayPresence(date = new Date()) {
     const dayKey = dayKeyFromDate(date);
     const mins = nowMinutes(date);
-    const list = [];
+    const working = [];
+    const upcoming = [];
+    const left = [];
+
     for (const person of activePeople()) {
-      for (const slot of person.schedule[dayKey] || []) {
+      const slots = [...(person.schedule[dayKey] || [])].sort(
+        (a, b) => toMinutes(a.start) - toMinutes(b.start)
+      );
+      if (!slots.length) continue;
+
+      const current = slots.find((slot) => {
         const start = toMinutes(slot.start);
         const end = toMinutes(slot.end);
-        if (mins >= start && mins < end) {
-          list.push({
-            person,
-            slot,
-            until: slot.end,
-            remaining: end - mins,
-          });
-        }
+        return mins >= start && mins < end;
+      });
+
+      if (current) {
+        working.push({
+          person,
+          slot: current,
+          until: current.end,
+          remaining: toMinutes(current.end) - mins,
+        });
+        continue;
+      }
+
+      const next = slots.find((slot) => toMinutes(slot.start) > mins);
+      if (next) {
+        upcoming.push({
+          person,
+          slot: next,
+          startsIn: toMinutes(next.start) - mins,
+        });
+        continue;
+      }
+
+      const past = slots.filter((slot) => toMinutes(slot.end) <= mins);
+      if (past.length) {
+        const last = past[past.length - 1];
+        left.push({
+          person,
+          slot: last,
+          leftAgo: mins - toMinutes(last.end),
+        });
       }
     }
-    list.sort((a, b) => toMinutes(a.until) - toMinutes(b.until) || a.person.name.localeCompare(b.person.name, "fa"));
-    return list;
+
+    working.sort(
+      (a, b) => toMinutes(a.until) - toMinutes(b.until) || a.person.name.localeCompare(b.person.name, "fa")
+    );
+    upcoming.sort(
+      (a, b) => a.startsIn - b.startsIn || a.person.name.localeCompare(b.person.name, "fa")
+    );
+    left.sort(
+      (a, b) => a.leftAgo - b.leftAgo || a.person.name.localeCompare(b.person.name, "fa")
+    );
+
+    return { working, upcoming, left };
   }
 
   function formatRemaining(mins) {
@@ -415,6 +456,62 @@
     const m = mins % 60;
     if (!m) return `<bdi>${toFaDigits(h)}</bdi> ساعت دیگر`;
     return `<bdi>${toFaDigits(h)}</bdi> ساعت و <bdi>${toFaDigits(m)}</bdi> دقیقه دیگر`;
+  }
+
+  function formatAgo(mins) {
+    if (mins < 60) {
+      return `<bdi>${toFaDigits(mins)}</bdi> دقیقه پیش`;
+    }
+    const h = Math.floor(mins / 60);
+    const m = mins % 60;
+    if (!m) return `<bdi>${toFaDigits(h)}</bdi> ساعت پیش`;
+    return `<bdi>${toFaDigits(h)}</bdi> ساعت و <bdi>${toFaDigits(m)}</bdi> دقیقه پیش`;
+  }
+
+  function renderNowItem(item, kind) {
+    const name = escapeHtml(item.person.name);
+    const type = typeLabel(item.slot.type);
+    let metaExtra = "";
+    let untilTime = "";
+    let untilLeft = "";
+
+    if (kind === "working") {
+      metaExtra = `${type} · از <bdi>${toFaDigits(item.slot.start)}</bdi>`;
+      untilTime = `تا ${toFaDigits(item.until)}`;
+      untilLeft = formatRemaining(item.remaining);
+    } else if (kind === "upcoming") {
+      metaExtra = `${type} · تا <bdi>${toFaDigits(item.slot.end)}</bdi>`;
+      untilTime = `از ${toFaDigits(item.slot.start)}`;
+      untilLeft = formatRemaining(item.startsIn);
+    } else {
+      metaExtra = `${type} · از <bdi>${toFaDigits(item.slot.start)}</bdi>`;
+      untilTime = `تا ${toFaDigits(item.slot.end)}`;
+      untilLeft = formatAgo(item.leftAgo);
+    }
+
+    return `
+      <div class="now-item now-item-${kind}">
+        <span class="dot" style="background:${item.person.color}"></span>
+        <div class="meta">
+          <strong title="${name}">${name}</strong>
+          <span>${metaExtra}</span>
+        </div>
+        <div class="until">
+          <span class="until-time">${untilTime}</span>
+          <span class="until-left">${untilLeft}</span>
+        </div>
+      </div>
+    `;
+  }
+
+  function renderNowSection(title, items, kind) {
+    if (!items.length) return "";
+    return `
+      <section class="now-section">
+        <h4 class="now-section-title">${title} <span>(${toFaDigits(items.length)})</span></h4>
+        ${items.map((item) => renderNowItem(item, kind)).join("")}
+      </section>
+    `;
   }
 
   function buildPayload() {
@@ -1590,35 +1687,23 @@
   function renderNowModal() {
     const now = new Date();
     el.nowClock.textContent = formatClock(now);
-    const working = getCurrentlyWorking(now);
+    const { working, upcoming, left } = getTodayPresence(now);
 
     if (!activePeople().length) {
       el.nowList.innerHTML = `<div class="now-empty">در این تیم هنوز فردی تعریف نشده است.</div>`;
       return;
     }
 
-    if (!working.length) {
-      el.nowList.innerHTML = `<div class="now-empty">الان کسی طبق برنامه مشغول کار نیست.</div>`;
+    if (!working.length && !upcoming.length && !left.length) {
+      el.nowList.innerHTML = `<div class="now-empty">امروز طبق برنامه کسی حضور ندارد.</div>`;
       return;
     }
 
-    el.nowList.innerHTML = working
-      .map(
-        (item) => `
-      <div class="now-item">
-        <span class="dot" style="background:${item.person.color}"></span>
-        <div class="meta">
-          <strong title="${escapeHtml(item.person.name)}">${escapeHtml(item.person.name)}</strong>
-          <span>${typeLabel(item.slot.type)} · از <bdi>${toFaDigits(item.slot.start)}</bdi></span>
-        </div>
-        <div class="until">
-          <span class="until-time">تا ${toFaDigits(item.until)}</span>
-          <span class="until-left">${formatRemaining(item.remaining)}</span>
-        </div>
-      </div>
-    `
-      )
-      .join("");
+    el.nowList.innerHTML = [
+      renderNowSection("الان سر کار", working, "working"),
+      renderNowSection("امروز می‌آیند", upcoming, "upcoming"),
+      renderNowSection("بودند و رفتند", left, "left"),
+    ].join("");
   }
 
   function openNowModal() {
